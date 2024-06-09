@@ -49,6 +49,8 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
+from seamless_communication.inference.alicia_annotator import *
+import os
 
 class Task(Enum):
     S2ST = auto()
@@ -112,6 +114,7 @@ class Translator(nn.Module):
 
         self.model = load_unity_model(model_name_or_card, device=device, dtype=dtype)
         self.model.eval()
+
         assert isinstance(self.model, UnitYModel)
 
         if text_tokenizer is None:
@@ -152,6 +155,14 @@ class Translator(nn.Module):
                 vocoder_name_or_card, device=device, dtype=dtype
             )
             self.vocoder.eval()
+            print("[YJ] ANNOTATE MODEL START")
+            model_annotator = ModelAnnotator()
+            for layer in get_children_modules(self.vocoder):
+                layer.register_forward_pre_hook(model_annotator.annotate_modules)
+                layer.register_forward_hook(model_annotator.stop_annotation)
+            self.vocoder.annotator = model_annotator
+            print("[YJ] ANNOTATE MODEL END")
+
 
     @classmethod
     def get_prediction(
@@ -169,6 +180,7 @@ class Translator(nn.Module):
         unit_generation_ngram_filtering: bool = False,
         duration_factor: float = 1.0,
         prosody_encoder_input: Optional[SequenceData] = None,
+        profile: bool = False
     ) -> Tuple[List[StringLike], Optional[Tensor]]:
         # We disregard unit generations opts for the NAR T2U decoder.
         if output_modality != Modality.SPEECH or isinstance(
@@ -193,6 +205,7 @@ class Translator(nn.Module):
             ngram_filtering=unit_generation_ngram_filtering,
             duration_factor=duration_factor,
             prosody_encoder_input=prosody_encoder_input,
+            profile=profile
         )
 
     @staticmethod
@@ -227,6 +240,8 @@ class Translator(nn.Module):
         duration_factor: float = 1.0,
         prosody_encoder_input: Optional[SequenceData] = None,
         src_text: Optional[StringLike] = None,
+        iter_id=-1,
+        profile: bool=False
     ) -> Tuple[List[StringLike], Optional[BatchedSpeechOutput]]:
         """
         The main method used to perform inference on all tasks.
@@ -316,7 +331,7 @@ class Translator(nn.Module):
                 beam_size=5, soft_max_seq_len=(25, 50)
             )
 
-        texts, units = self.get_prediction(
+        texts, units, prof, profile_names = self.get_prediction(
             self.model,
             self.text_tokenizer,
             self.unit_tokenizer,
@@ -330,6 +345,7 @@ class Translator(nn.Module):
             unit_generation_ngram_filtering=unit_generation_ngram_filtering,
             duration_factor=duration_factor,
             prosody_encoder_input=prosody_encoder_input,
+            profile=profile
         )
 
         if self.apply_mintox and task_str != Task.ASR.name:
@@ -379,6 +395,19 @@ class Translator(nn.Module):
             )
 
         if output_modality == Modality.TEXT:
+            if profile:
+                prof.stop()
+                dump_dir = "/fsx-atom/yejinlee/paper_submission_results/seamless_breakdown/1gpu_1node/"+task_str+"/batch_size_1/"
+                os.makedirs(dump_dir, exist_ok=True)
+                prof.export_chrome_trace(dump_dir + "profile_sample_"+str(iter_id)+"_gpu_0.json")
+                print("Writing result to ", dump_dir + "profile_sample_"+str(iter_id)+"_gpu_0.json")
+
+                final_names = set()
+                for names in profile_names:
+                    for l in range(len(names)):
+                        final_names.add(names[l])
+
+                print("names to pass in = ", "*".join(list(final_names)))
             return texts, None
         else:
             assert units is not None
@@ -418,6 +447,24 @@ class Translator(nn.Module):
                         ),
                     ].unsqueeze(0)
                     audio_wavs.append(padding_removed_audio_wav)
+
+            if profile:
+                prof.stop()
+                dump_dir = "/fsx-atom/yejinlee/paper_submission_results/seamless_breakdown/1gpu_1node/"+task_str+"/batch_size_1/"
+                os.makedirs(dump_dir, exist_ok=True)
+                prof.export_chrome_trace(dump_dir + "profile_sample_"+str(iter_id)+"_gpu_0.json")
+                print("Writing result to ", dump_dir + "profile_sample_"+str(iter_id)+"_gpu_0.json")
+
+
+                profile_names.append(self.vocoder.annotator.print_name_counts("Vocoder"))
+
+                final_names = set()
+                for names in profile_names:
+                    for l in range(len(names)):
+                        final_names.add(names[l])
+
+                print("names to pass in = ", "*".join(list(final_names)))
+
             return (
                 texts,
                 BatchedSpeechOutput(

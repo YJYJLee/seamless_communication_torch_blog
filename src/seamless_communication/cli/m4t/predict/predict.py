@@ -27,7 +27,7 @@ def add_inference_arguments(parser: argparse.ArgumentParser) -> argparse.Argumen
     parser.add_argument(
         "--task", 
         type=str, 
-        choices=["ASR", "S2ST", "S2TT"],
+        choices=["ASR", "S2ST", "S2TT", "T2TT", "T2ST"],
         help=(
             "* `ASR` -- automatic speech recognition (transcription);"
             "* `S2ST` -- speech to speech translation;"
@@ -232,6 +232,18 @@ def main() -> None:
     else:
         translator_input = args.input
 
+    # Warmup
+    for i in range(5):
+        text_output, speech_output = translator.predict(
+            translator_input,
+            args.task,
+            args.tgt_lang,
+            src_lang=args.src_lang,
+            text_generation_opts=text_generation_opts,
+            unit_generation_opts=unit_generation_opts,
+            unit_generation_ngram_filtering=args.unit_generation_ngram_filtering,
+        )
+
     text_output, speech_output = translator.predict(
         translator_input,
         args.task,
@@ -240,7 +252,9 @@ def main() -> None:
         text_generation_opts=text_generation_opts,
         unit_generation_opts=unit_generation_opts,
         unit_generation_ngram_filtering=args.unit_generation_ngram_filtering,
+        profile=True
     )
+
 
     if speech_output is not None:
         logger.info(f"Saving translated audio in {args.tgt_lang}")

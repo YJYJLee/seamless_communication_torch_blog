@@ -35,6 +35,7 @@ from seamless_communication.models.unity.unit_tokenizer import (
     UnitTokenizer,
 )
 
+from seamless_communication.inference.alicia_annotator import *
 
 def remove_consecutive_repeated_ngrams(
     sequence: List[int], min_size: int = 1, max_size: int = 40
@@ -121,6 +122,14 @@ class UnitYGenerator:
 
         self.model = model
 
+        print("[YJ] ANNOTATE MODEL START")
+        model_annotator = ModelAnnotator()
+        for layer in get_children_modules(self.model):
+            layer.register_forward_pre_hook(model_annotator.annotate_modules)
+            layer.register_forward_hook(model_annotator.stop_annotation)
+        self.model.annotator = model_annotator
+        print("[YJ] ANNOTATE MODEL END")
+        
         if text_opts is None:
             text_opts = SequenceGeneratorOptions()
 
@@ -139,6 +148,14 @@ class UnitYGenerator:
             final_proj=model.final_proj,
             target_vocab_info=model.target_vocab_info,
         )
+        print("[YJ] ANNOTATE MODEL START")
+        model_annotator = ModelAnnotator()
+        for layer in get_children_modules(s2t_model):
+            layer.register_forward_pre_hook(model_annotator.annotate_modules)
+            layer.register_forward_hook(model_annotator.stop_annotation)
+        s2t_model.annotator = model_annotator
+        print("[YJ] ANNOTATE MODEL END")
+
 
         step_processors = []
         if text_opts.step_processor is not None:
@@ -171,6 +188,14 @@ class UnitYGenerator:
                 final_proj=model.final_proj,
                 target_vocab_info=model.target_vocab_info,
             )
+            print("[YJ] ANNOTATE MODEL START")
+            model_annotator = ModelAnnotator()
+            for layer in get_children_modules(t2t_model):
+                layer.register_forward_pre_hook(model_annotator.annotate_modules)
+                layer.register_forward_hook(model_annotator.stop_annotation)
+            t2t_model.annotator = model_annotator
+            print("[YJ] ANNOTATE MODEL END")
+
             generator = BeamSearchSeq2SeqGenerator(
                 t2t_model,
                 beam_size=text_opts.beam_size,
@@ -234,6 +259,7 @@ class UnitYGenerator:
         ngram_filtering: bool = False,
         duration_factor: float = 1.0,
         prosody_encoder_input: Optional[SequenceData] = None,
+        profile: bool = False
     ) -> Tuple[List[StringLike], Optional[Tensor]]:
         """
         :param source_seqs:
@@ -256,6 +282,9 @@ class UnitYGenerator:
             - The output of the text generator.
             - The output of the unit generator.
         """
+        if profile:
+            prof = torch.profiler.profile(with_stack=False, with_flops=False, profile_memory=False)
+            prof.start()
 
         if input_modality == "speech":
             texts, text_gen_output = self.s2t_converter.batch_convert(
@@ -272,9 +301,17 @@ class UnitYGenerator:
         else:
             raise ValueError(f"Unsupported input_modality: {input_modality}")
 
+
         # We skip T2U when we only need to output text.
         if output_modality == "text":
-            return texts, None
+            if profile:
+                names = [self.model.annotator.print_name_counts("Model")]
+                if hasattr(self, 's2t_converter'):
+                    names.append(self.s2t_converter.generator.model.annotator.print_name_counts("s2t_converter"))
+                if hasattr(self, 't2t_converter'):
+                    names.append(self.t2t_converter.generator.model.annotator.print_name_counts("t2t_converter"))
+
+            return texts, None, prof if profile else None, names if profile else None
 
         assert self.model.target_vocab_info.pad_idx is not None
 
@@ -361,4 +398,10 @@ class UnitYGenerator:
             arr = remove_consecutive_repeated_ngrams(units[0].tolist())
             units = torch.tensor(arr).to(units).unsqueeze(0)
 
-        return texts, units
+        if profile:
+            names = [self.model.annotator.print_name_counts("Model")]
+            if hasattr(self, 's2t_converter'):
+                names.append(self.s2t_converter.generator.model.annotator.print_name_counts("s2t_converter"))
+            if hasattr(self, 't2t_converter'):
+                names.append(self.t2t_converter.generator.model.annotator.print_name_counts("t2t_converter"))
+        return texts, units, prof if profile else None, names if profile else None

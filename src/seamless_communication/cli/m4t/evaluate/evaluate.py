@@ -271,6 +271,8 @@ def run_eval(
         itertools.repeat(None)
     ) as unit_file:
         sample_id = 0
+        iter_id = 0
+        warmup = 15
         if ctx.output_modality == Modality.SPEECH:
             hyp_file.write("ref_tgt_text\tpred_tgt_text\tpred_tgt_audio\n")
         else:
@@ -292,11 +294,13 @@ def run_eval(
             else:
                 src = example["src_text"]
 
+
             # Skip performing inference when the input is entirely corrupted.
             if src["seqs"].numel() > 0:
                 # HACK:: Fix this bad handling
                 # RuntimeError: The sequence generator returned no hypothesis at index 2. Please file a bug report.
                 try:
+                    profile_cond = iter_id >= warmup and iter_id < warmup+5
                     (text_output, speech_output,) = translator.predict(
                         src,
                         ctx.task,
@@ -305,6 +309,8 @@ def run_eval(
                         text_generation_opts=ctx.text_generation_opts,
                         unit_generation_opts=ctx.unit_generation_opts,
                         unit_generation_ngram_filtering=ctx.unit_generation_ngram_filtering,
+                        iter_id = iter_id,
+                        profile = profile_cond
                     )
                 except RuntimeError as e:
                     logger.exception(f"Caught RuntimeError: {e}")
@@ -346,6 +352,9 @@ def run_eval(
                 progress_bar.update(1)
                 if n_samples and progress_bar.n == n_samples:
                     break
+            iter_id += 1
+            if iter_id == warmup+5:
+                exit(0)
             if n_samples and progress_bar.n == n_samples:
                 break
 
@@ -455,6 +464,8 @@ def main(optional_args: Optional[Dict[str, Any]] = None) -> None:
         raise ValueError("Unable to recognize file type! Please use a data_file with either .tsv or .json extension.")
     
     input_modality, output_modality = Translator.get_modalities_from_task_str(args.task)
+    print("input_modality: ", input_modality)
+    print("output_modality: ", output_modality)
 
     if input_modality == Modality.SPEECH and not Path(args.audio_root_dir).exists():
         raise ValueError(
