@@ -258,15 +258,16 @@ class UnitYGenerator:
         """
 
         if input_modality == "speech":
-            texts, text_gen_output = self.s2t_converter.batch_convert(
+            texts, text_gen_output, seq_len_return = self.s2t_converter.batch_convert(
                 source_seqs, source_padding_mask
             )
+
         elif input_modality == "text":
             if self.t2t_converter is None:
                 raise ValueError(
                     "Please set `use_text_encoder` to `True` in your model config to encode text."
                 )
-            texts, text_gen_output = self.t2t_converter.batch_convert(
+            texts, text_gen_output, seq_len_return = self.t2t_converter.batch_convert(
                 source_seqs, source_padding_mask
             )
         else:
@@ -274,7 +275,7 @@ class UnitYGenerator:
 
         # We skip T2U when we only need to output text.
         if output_modality == "text":
-            return texts, None
+            return texts, None, seq_len_return
 
         assert self.model.target_vocab_info.pad_idx is not None
 
@@ -361,4 +362,4 @@ class UnitYGenerator:
             arr = remove_consecutive_repeated_ngrams(units[0].tolist())
             units = torch.tensor(arr).to(units).unsqueeze(0)
 
-        return texts, units
+        return texts, units, seq_len_return

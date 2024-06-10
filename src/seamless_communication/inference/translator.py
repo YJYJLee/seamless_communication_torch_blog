@@ -306,7 +306,7 @@ class Translator(nn.Module):
         assert isinstance(self.model, UnitYModel)
 
         seqs, padding_mask = get_seqs_and_padding_mask(src)
-
+        
         if text_generation_opts is None:
             text_generation_opts = SequenceGeneratorOptions(
                 beam_size=5, soft_max_seq_len=(1, 200)
@@ -316,7 +316,7 @@ class Translator(nn.Module):
                 beam_size=5, soft_max_seq_len=(25, 50)
             )
 
-        texts, units = self.get_prediction(
+        texts, units, seq_len_return = self.get_prediction(
             self.model,
             self.text_tokenizer,
             self.unit_tokenizer,
@@ -379,9 +379,10 @@ class Translator(nn.Module):
             )
 
         if output_modality == Modality.TEXT:
-            return texts, None
+            return texts, None, seq_len_return
         else:
             assert units is not None
+            seq_len_return[1] = str(units.shape[-1])
 
             if isinstance(self.model.t2u_model, UnitYT2UModel):
                 # Remove the lang token for AR UnitY since the vocoder doesn't need it
@@ -425,4 +426,5 @@ class Translator(nn.Module):
                     audio_wavs=audio_wavs,
                     sample_rate=sample_rate,
                 ),
+                seq_len_return
             )
