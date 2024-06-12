@@ -155,13 +155,14 @@ class Translator(nn.Module):
                 vocoder_name_or_card, device=device, dtype=dtype
             )
             self.vocoder.eval()
-            print("[YJ] ANNOTATE MODEL START")
-            model_annotator = ModelAnnotator()
-            for layer in get_children_modules(self.vocoder):
-                layer.register_forward_pre_hook(model_annotator.annotate_modules)
-                layer.register_forward_hook(model_annotator.stop_annotation)
-            self.vocoder.annotator = model_annotator
-            print("[YJ] ANNOTATE MODEL END")
+            if not hasattr(self.vocoder, 'annotator'):
+                print("Vocoder [YJ] ANNOTATE MODEL START")
+                model_annotator = ModelAnnotator()
+                for layer in get_children_modules(self.vocoder):
+                    layer.register_forward_pre_hook(model_annotator.annotate_modules)
+                    layer.register_forward_hook(model_annotator.stop_annotation)
+                self.vocoder.annotator = model_annotator
+                print("Vocoder [YJ] ANNOTATE MODEL END")
 
 
     @classmethod
@@ -180,7 +181,8 @@ class Translator(nn.Module):
         unit_generation_ngram_filtering: bool = False,
         duration_factor: float = 1.0,
         prosody_encoder_input: Optional[SequenceData] = None,
-        profile: bool = False
+        profile: bool = False,
+        iter_id: int = -1
     ) -> Tuple[List[StringLike], Optional[Tensor]]:
         # We disregard unit generations opts for the NAR T2U decoder.
         if output_modality != Modality.SPEECH or isinstance(
@@ -195,6 +197,7 @@ class Translator(nn.Module):
             unit_tokenizer if output_modality == Modality.SPEECH else None,
             text_opts=text_generation_opts,
             unit_opts=unit_generation_opts,
+            iter_id=iter_id
         )
 
         return generator(
@@ -241,7 +244,8 @@ class Translator(nn.Module):
         prosody_encoder_input: Optional[SequenceData] = None,
         src_text: Optional[StringLike] = None,
         iter_id=-1,
-        profile: bool=False
+        profile: bool=False,
+        batch_size=-1
     ) -> Tuple[List[StringLike], Optional[BatchedSpeechOutput]]:
         """
         The main method used to perform inference on all tasks.
@@ -305,7 +309,9 @@ class Translator(nn.Module):
                     "sample_rate": sample_rate,
                     "format": -1,
                 }
-            src = self.collate(self.convert_to_fbank(decoded_audio))["fbank"]
+            output = self.convert_to_fbank(decoded_audio)
+            print(output)
+            src = self.collate(output)["fbank"]
         else:
             if src_lang is None:
                 raise ValueError("src_lang must be specified for T2ST, T2TT tasks.")
@@ -345,7 +351,8 @@ class Translator(nn.Module):
             unit_generation_ngram_filtering=unit_generation_ngram_filtering,
             duration_factor=duration_factor,
             prosody_encoder_input=prosody_encoder_input,
-            profile=profile
+            profile=profile,
+            iter_id=iter_id
         )
 
         if self.apply_mintox and task_str != Task.ASR.name:
@@ -397,7 +404,7 @@ class Translator(nn.Module):
         if output_modality == Modality.TEXT:
             if profile:
                 prof.stop()
-                dump_dir = "/fsx-atom/yejinlee/paper_submission_results/seamless_breakdown/1gpu_1node/"+task_str+"/batch_size_1/"
+                dump_dir = "/fsx-atom/yejinlee/paper_submission_results/seamless_breakdown/1gpu_1node/"+task_str+"/batch_size_"+str(batch_size)+"/"
                 os.makedirs(dump_dir, exist_ok=True)
                 prof.export_chrome_trace(dump_dir + "profile_sample_"+str(iter_id)+"_gpu_0.json")
                 print("Writing result to ", dump_dir + "profile_sample_"+str(iter_id)+"_gpu_0.json")
@@ -406,7 +413,7 @@ class Translator(nn.Module):
                 for names in profile_names:
                     for l in range(len(names)):
                         final_names.add(names[l])
-
+                final_names.add("MODULE_KV_Cache_Reorder_AG")
                 print("names to pass in = ", "*".join(list(final_names)))
             return texts, None
         else:
@@ -450,7 +457,7 @@ class Translator(nn.Module):
 
             if profile:
                 prof.stop()
-                dump_dir = "/fsx-atom/yejinlee/paper_submission_results/seamless_breakdown/1gpu_1node/"+task_str+"/batch_size_1/"
+                dump_dir = "/fsx-atom/yejinlee/paper_submission_results/seamless_breakdown/1gpu_1node/"+task_str+"/batch_size_"+str(batch_size)+"/"
                 os.makedirs(dump_dir, exist_ok=True)
                 prof.export_chrome_trace(dump_dir + "profile_sample_"+str(iter_id)+"_gpu_0.json")
                 print("Writing result to ", dump_dir + "profile_sample_"+str(iter_id)+"_gpu_0.json")
@@ -463,6 +470,8 @@ class Translator(nn.Module):
                     for l in range(len(names)):
                         final_names.add(names[l])
 
+                final_names.add("MODULE_KV_Cache_Reorder_AG")
+                final_names.add("MODULE_Masked_Select_AG")
                 print("names to pass in = ", "*".join(list(final_names)))
 
             return (

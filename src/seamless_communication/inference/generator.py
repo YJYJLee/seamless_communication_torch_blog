@@ -103,6 +103,7 @@ class UnitYGenerator:
         unit_tokenizer: Optional[UnitTokenizer] = None,
         text_opts: Optional[SequenceGeneratorOptions] = None,
         unit_opts: Optional[SequenceGeneratorOptions] = None,
+        iter_id: int=-1
     ) -> None:
         """
         :param model:
@@ -122,14 +123,16 @@ class UnitYGenerator:
 
         self.model = model
 
-        print("[YJ] ANNOTATE MODEL START")
-        model_annotator = ModelAnnotator()
-        for layer in get_children_modules(self.model):
-            layer.register_forward_pre_hook(model_annotator.annotate_modules)
-            layer.register_forward_hook(model_annotator.stop_annotation)
-        self.model.annotator = model_annotator
-        print("[YJ] ANNOTATE MODEL END")
-        
+        # if not hasattr(self.model, 'annotator'):
+        if iter_id==0:
+            print("[YJ] ANNOTATE MODEL START")
+            model_annotator = ModelAnnotator()
+            for layer in get_children_modules(self.model):
+                layer.register_forward_pre_hook(model_annotator.annotate_modules)
+                layer.register_forward_hook(model_annotator.stop_annotation)
+            self.model.annotator = model_annotator
+            print("[YJ] ANNOTATE MODEL END")
+            
         if text_opts is None:
             text_opts = SequenceGeneratorOptions()
 
@@ -148,13 +151,15 @@ class UnitYGenerator:
             final_proj=model.final_proj,
             target_vocab_info=model.target_vocab_info,
         )
-        print("[YJ] ANNOTATE MODEL START")
-        model_annotator = ModelAnnotator()
-        for layer in get_children_modules(s2t_model):
-            layer.register_forward_pre_hook(model_annotator.annotate_modules)
-            layer.register_forward_hook(model_annotator.stop_annotation)
-        s2t_model.annotator = model_annotator
-        print("[YJ] ANNOTATE MODEL END")
+        # if not hasattr(s2t_model, 'annotator'):
+        if iter_id==0:
+            print("[YJ] ANNOTATE MODEL START")
+            model_annotator = ModelAnnotator()
+            for layer in get_children_modules(s2t_model):
+                layer.register_forward_pre_hook(model_annotator.annotate_modules)
+                layer.register_forward_hook(model_annotator.stop_annotation)
+            s2t_model.annotator = model_annotator
+            print("[YJ] ANNOTATE MODEL END")
 
 
         step_processors = []
@@ -188,13 +193,15 @@ class UnitYGenerator:
                 final_proj=model.final_proj,
                 target_vocab_info=model.target_vocab_info,
             )
-            print("[YJ] ANNOTATE MODEL START")
-            model_annotator = ModelAnnotator()
-            for layer in get_children_modules(t2t_model):
-                layer.register_forward_pre_hook(model_annotator.annotate_modules)
-                layer.register_forward_hook(model_annotator.stop_annotation)
-            t2t_model.annotator = model_annotator
-            print("[YJ] ANNOTATE MODEL END")
+            # if not hasattr(t2t_model, 'annotator'):
+            if iter_id==0:
+                print("[YJ] ANNOTATE MODEL START")
+                model_annotator = ModelAnnotator()
+                for layer in get_children_modules(t2t_model):
+                    layer.register_forward_pre_hook(model_annotator.annotate_modules)
+                    layer.register_forward_hook(model_annotator.stop_annotation)
+                t2t_model.annotator = model_annotator
+                print("[YJ] ANNOTATE MODEL END")
 
             generator = BeamSearchSeq2SeqGenerator(
                 t2t_model,
@@ -306,10 +313,10 @@ class UnitYGenerator:
         if output_modality == "text":
             if profile:
                 names = [self.model.annotator.print_name_counts("Model")]
-                if hasattr(self, 's2t_converter'):
-                    names.append(self.s2t_converter.generator.model.annotator.print_name_counts("s2t_converter"))
-                if hasattr(self, 't2t_converter'):
-                    names.append(self.t2t_converter.generator.model.annotator.print_name_counts("t2t_converter"))
+                # if hasattr(self, 's2t_converter'):
+                #     names.append(self.s2t_converter.generator.model.annotator.print_name_counts("s2t_converter"))
+                # if hasattr(self, 't2t_converter'):
+                #     names.append(self.t2t_converter.generator.model.annotator.print_name_counts("t2t_converter"))
 
             return texts, None, prof if profile else None, names if profile else None
 
@@ -400,8 +407,8 @@ class UnitYGenerator:
 
         if profile:
             names = [self.model.annotator.print_name_counts("Model")]
-            if hasattr(self, 's2t_converter'):
-                names.append(self.s2t_converter.generator.model.annotator.print_name_counts("s2t_converter"))
-            if hasattr(self, 't2t_converter'):
-                names.append(self.t2t_converter.generator.model.annotator.print_name_counts("t2t_converter"))
+            # if hasattr(self, 's2t_converter'):
+            #     names.append(self.s2t_converter.generator.model.annotator.print_name_counts("s2t_converter"))
+            # if hasattr(self, 't2t_converter'):
+            #     names.append(self.t2t_converter.generator.model.annotator.print_name_counts("t2t_converter"))
         return texts, units, prof if profile else None, names if profile else None

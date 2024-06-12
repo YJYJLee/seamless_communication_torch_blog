@@ -272,7 +272,7 @@ def run_eval(
     ) as unit_file:
         sample_id = 0
         iter_id = 0
-        warmup = 15
+        warmup = 15 if total_steps > ctx.batch_size*20 else 1
         if ctx.output_modality == Modality.SPEECH:
             hyp_file.write("ref_tgt_text\tpred_tgt_text\tpred_tgt_audio\n")
         else:
@@ -310,7 +310,8 @@ def run_eval(
                         unit_generation_opts=ctx.unit_generation_opts,
                         unit_generation_ngram_filtering=ctx.unit_generation_ngram_filtering,
                         iter_id = iter_id,
-                        profile = profile_cond
+                        profile = profile_cond,
+                        batch_size = ctx.batch_size
                     )
                 except RuntimeError as e:
                     logger.exception(f"Caught RuntimeError: {e}")
@@ -357,7 +358,7 @@ def run_eval(
                 exit(0)
             if n_samples and progress_bar.n == n_samples:
                 break
-
+    exit(0)
     progress_bar.close()
     logger.info(f"Processed {sample_id} samples")
 
