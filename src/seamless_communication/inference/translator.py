@@ -310,7 +310,6 @@ class Translator(nn.Module):
                     "format": -1,
                 }
             output = self.convert_to_fbank(decoded_audio)
-            print(output)
             src = self.collate(output)["fbank"]
         else:
             if src_lang is None:
