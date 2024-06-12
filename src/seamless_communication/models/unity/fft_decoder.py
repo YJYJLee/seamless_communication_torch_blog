@@ -18,6 +18,7 @@ from seamless_communication.models.unity.fft_decoder_layer import (
     FeedForwardTransformerLayer,
 )
 
+import torch
 
 @final
 class FeedForwardTransformer(Module):
@@ -68,13 +69,14 @@ class FeedForwardTransformer(Module):
         padding_mask: Optional[PaddingMask],
         film_cond_emb: Optional[Tensor] = None,
     ) -> Tuple[Tensor, Optional[PaddingMask]]:
+        gpu_util = list()
         for layer in self.layers.drop_iter():
             seqs, padding_mask = layer(seqs, padding_mask, film_cond_emb=film_cond_emb)
-
+            gpu_util.append(torch.cuda.utilization(torch.cuda.current_device()))
         if self.layer_norm is not None:
             seqs = self.layer_norm(seqs)
 
-        return seqs, padding_mask
+        return seqs, padding_mask, gpu_util
 
     def extra_repr(self) -> str:
         """:meta private:"""

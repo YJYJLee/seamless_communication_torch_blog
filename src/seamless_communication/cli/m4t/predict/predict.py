@@ -27,7 +27,7 @@ def add_inference_arguments(parser: argparse.ArgumentParser) -> argparse.Argumen
     parser.add_argument(
         "--task", 
         type=str, 
-        choices=["ASR", "S2ST", "S2TT"],
+        choices=["ASR", "S2ST", "S2TT", "T2ST", "T2TT"],
         help=(
             "* `ASR` -- automatic speech recognition (transcription);"
             "* `S2ST` -- speech to speech translation;"

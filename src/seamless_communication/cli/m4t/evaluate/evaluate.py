@@ -40,6 +40,9 @@ from seamless_communication.inference import (
     Translator,
 )
 
+import numpy as np
+import os 
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s -- %(name)s: %(message)s",
@@ -275,8 +278,14 @@ def run_eval(
             hyp_file.write("ref_tgt_text\tpred_tgt_text\tpred_tgt_audio\n")
         else:
             hyp_file.write("ref_tgt_text\tpred_tgt_text\n")
+        iter_id = 0
+        gpu_utils = list()
+        timer_results = dict()
+        memory_capas = list()
+        seq_lengths = dict()
         for example in pipeline:
             valid_sequences: Optional[Tensor] = None
+            warmup = 15 if total_steps > ctx.batch_size*20 else 1
             if ctx.input_modality == Modality.SPEECH:
                 src = example["audio"]["data"]["fbank"]
                 # Skip corrupted audio tensors.
@@ -297,7 +306,8 @@ def run_eval(
                 # HACK:: Fix this bad handling
                 # RuntimeError: The sequence generator returned no hypothesis at index 2. Please file a bug report.
                 try:
-                    (text_output, speech_output,) = translator.predict(
+                    profile_cond = iter_id >= warmup and iter_id < warmup+5
+                    (text_output, speech_output, seq_len, runtime, gpu_util, memory_capa) = translator.predict(
                         src,
                         ctx.task,
                         ctx.target_lang,
@@ -306,6 +316,22 @@ def run_eval(
                         unit_generation_opts=ctx.unit_generation_opts,
                         unit_generation_ngram_filtering=ctx.unit_generation_ngram_filtering,
                     )
+                    if profile_cond:
+                        gpu_utils.append(gpu_util)
+                        memory_capas.append(memory_capa)
+                        if len(timer_results)==0:
+                            for k, v in runtime.items():
+                                timer_results[k] = [v]
+                        else:
+                            for k in timer_results.keys():
+                                timer_results[k].append(runtime[k])
+                        if len(seq_lengths)==0:
+                            for k, v in seq_len.items():
+                                seq_lengths[k] = [v]
+                        else:
+                            for k in seq_lengths.keys():
+                                seq_lengths[k].append(seq_len[k])
+
                 except RuntimeError as e:
                     logger.exception(f"Caught RuntimeError: {e}")
                     continue
@@ -346,8 +372,36 @@ def run_eval(
                 progress_bar.update(1)
                 if n_samples and progress_bar.n == n_samples:
                     break
+            iter_id += 1
+            if iter_id == warmup+5:
+                break
             if n_samples and progress_bar.n == n_samples:
                 break
+    
+    for k, v in seq_lengths.items():
+        print("Avg "+k, ": ", np.average(v))
+
+    dump_dir = "/fsx-atom/yejinlee/sweep_final/1gpu_1node/"+ctx.task+"/batch_size_"+str(ctx.batch_size)
+    os.makedirs(dump_dir, exist_ok=True)
+    with open(dump_dir+"/seq_lengths.txt", "w") as f:
+        f.write("\t".join(list(seq_lengths.keys()))+"\n")
+        f.write("\t".join([str(np.average(v)) for v in seq_lengths.values()])+"\n")
+        print("Written to : ", dump_dir+"/seq_lengths.txt")
+
+    with open(dump_dir+"/timer_result.txt", "w") as f:
+        f.write("\t".join(list(timer_results.keys()))+"\n")
+        f.write("\t".join([str(np.average(v)) for k, v in timer_results.items()]))
+    print("Written to : ", dump_dir+"/timer_result.txt")
+
+    with open(dump_dir+"/memory_alloc.txt", "w") as f:
+        f.write("\n".join([str(g) for g in memory_capas]))
+        print("Written to : ", dump_dir+"/memory_alloc.txt")
+
+    with open(dump_dir+"/gpu_util.txt", "w") as f:
+        f.write("\n".join([str(g) for g in gpu_utils]))
+        print("Written to : ", dump_dir+"/gpu_util.txt")
+        
+    exit(0)
 
     progress_bar.close()
     logger.info(f"Processed {sample_id} samples")

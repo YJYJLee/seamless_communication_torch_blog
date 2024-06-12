@@ -42,6 +42,8 @@ from seamless_communication.toxicity import (
 )
 from seamless_communication.toxicity.mintox import mintox_pipeline
 
+import time
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s -- %(name)s: %(message)s",
@@ -316,7 +318,10 @@ class Translator(nn.Module):
                 beam_size=5, soft_max_seq_len=(25, 50)
             )
 
-        texts, units = self.get_prediction(
+        # runtime = dict()
+        # torch.cuda.synchronize()
+        # start_time = time.time()
+        texts, units, seq_lengths, timer_result, gpu_util, memory_capa = self.get_prediction(
             self.model,
             self.text_tokenizer,
             self.unit_tokenizer,
@@ -379,7 +384,10 @@ class Translator(nn.Module):
             )
 
         if output_modality == Modality.TEXT:
-            return texts, None
+            # torch.cuda.synchronize()
+            # runtime["Total"] = (time.time()-start_time)*1000
+
+            return texts, None, seq_lengths, timer_result, gpu_util, memory_capa
         else:
             assert units is not None
 
@@ -395,6 +403,10 @@ class Translator(nn.Module):
 
             audio_wavs = []
             speech_units = []
+            seq_lengths["Vocoder"] = units.shape[1]
+            torch.cuda.synchronize()
+            start_time = time.time()
+
             for i in range(len(units)):
                 assert self.model.t2u_model is not None
                 unit_padding_mask = (
@@ -418,6 +430,11 @@ class Translator(nn.Module):
                         ),
                     ].unsqueeze(0)
                     audio_wavs.append(padding_removed_audio_wav)
+
+
+            torch.cuda.synchronize()
+            timer_result["Vocoder"] = (time.time()-start_time)*1000
+
             return (
                 texts,
                 BatchedSpeechOutput(
@@ -425,4 +442,5 @@ class Translator(nn.Module):
                     audio_wavs=audio_wavs,
                     sample_rate=sample_rate,
                 ),
+                seq_lengths, timer_result, gpu_util, memory_capa
             )

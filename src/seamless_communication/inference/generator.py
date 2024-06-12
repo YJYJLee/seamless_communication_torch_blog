@@ -35,6 +35,8 @@ from seamless_communication.models.unity.unit_tokenizer import (
     UnitTokenizer,
 )
 
+import numpy as np
+import time
 
 def remove_consecutive_repeated_ngrams(
     sequence: List[int], min_size: int = 1, max_size: int = 40
@@ -256,9 +258,9 @@ class UnitYGenerator:
             - The output of the text generator.
             - The output of the unit generator.
         """
-
+        gpu_utils = list()
         if input_modality == "speech":
-            texts, text_gen_output = self.s2t_converter.batch_convert(
+            texts, text_gen_output, timer_result, seq_lengths, gpu_util = self.s2t_converter.batch_convert(
                 source_seqs, source_padding_mask
             )
         elif input_modality == "text":
@@ -266,15 +268,17 @@ class UnitYGenerator:
                 raise ValueError(
                     "Please set `use_text_encoder` to `True` in your model config to encode text."
                 )
-            texts, text_gen_output = self.t2t_converter.batch_convert(
+            texts, text_gen_output, timer_result, seq_lengths, gpu_util = self.t2t_converter.batch_convert(
                 source_seqs, source_padding_mask
             )
         else:
             raise ValueError(f"Unsupported input_modality: {input_modality}")
 
+        gpu_utils.append(gpu_util)
+        
         # We skip T2U when we only need to output text.
         if output_modality == "text":
-            return texts, None
+            return texts, None, seq_lengths, timer_result, np.average(gpu_utils), torch.cuda.max_memory_allocated(torch.cuda.current_device())
 
         assert self.model.target_vocab_info.pad_idx is not None
 
@@ -290,13 +294,19 @@ class UnitYGenerator:
         if text_padding_mask is not None:
             text_padding_mask = text_padding_mask.trim(1)
 
+        seq_lengths["Decode"] = text_seqs.shape[1]
+        torch.cuda.synchronize()
+        start_time = time.time()
         # Use the output of the text generator to compute the decoder output.
-        decoder_output, decoder_padding_mask = self.model.decode(
+        decoder_output, decoder_padding_mask, gpu_util = self.model.decode(
             text_seqs,
             text_padding_mask,
             text_gen_output.encoder_output,
             text_gen_output.encoder_padding_mask,
         )
+        torch.cuda.synchronize()
+        timer_result["Decode"] = (time.time()-start_time)*1000
+        gpu_utils += gpu_util
 
         assert self.model.t2u_model is not None
         assert self.unit_decoder is not None
@@ -314,6 +324,9 @@ class UnitYGenerator:
             ).unsqueeze(1)
 
         if isinstance(self.model.t2u_model, UnitYT2UModel):
+            # YJ, should not come here
+            assert False
+            # YJ
             assert self.unit_generator is not None
             assert self.unit_prefix_indices is not None
 
@@ -335,7 +348,10 @@ class UnitYGenerator:
                 unit_seq_list, self.model.t2u_model.target_vocab_info.pad_idx
             )
         else:
-            t2u_model_output, decoder_padding_mask, _ = self.model.t2u_model(
+            torch.cuda.synchronize()
+            start_time = time.time()
+
+            t2u_model_output, decoder_padding_mask, _, seq, gpu_util = self.model.t2u_model(
                 text_decoder_output=decoder_output,
                 text_decoder_padding_mask=decoder_padding_mask,
                 text_seqs=text_seqs,
@@ -348,9 +364,14 @@ class UnitYGenerator:
             unit_seqs = apply_padding_mask(
                 unit_seqs, decoder_padding_mask, t2u_model_output.vocab_info.pad_idx
             )
+            gpu_utils += gpu_util
+            for k, v in seq.items():
+                seq_lengths[k] = v
 
-        # Convert to speech units.
+        # Convert to speech units.      
         units = self.unit_decoder(unit_seqs)
+        torch.cuda.synchronize()
+        timer_result["T2U"] = (time.time()-start_time)*1000
 
         # ngram-filtering doesn't apply to NAR unit decoding.
         if ngram_filtering and isinstance(self.model.t2u_model, UnitYT2UModel):
@@ -361,4 +382,4 @@ class UnitYGenerator:
             arr = remove_consecutive_repeated_ngrams(units[0].tolist())
             units = torch.tensor(arr).to(units).unsqueeze(0)
 
-        return texts, units
+        return texts, units, seq_lengths, timer_result, np.average(gpu_utils), torch.cuda.max_memory_allocated(torch.cuda.current_device())
