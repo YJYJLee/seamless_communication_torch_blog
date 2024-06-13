@@ -274,7 +274,7 @@ def run_eval(
         itertools.repeat(None)
     ) as unit_file:
         sample_id = 0
-        seq_lengths = list()
+        seq_lengths = dict()
         if ctx.output_modality == Modality.SPEECH:
             hyp_file.write("ref_tgt_text\tpred_tgt_text\tpred_tgt_audio\n")
         else:
@@ -310,7 +310,14 @@ def run_eval(
                         unit_generation_opts=ctx.unit_generation_opts,
                         unit_generation_ngram_filtering=ctx.unit_generation_ngram_filtering,
                     )
-                    seq_lengths.append(seq_len)
+                    if len(seq_lengths)==0:
+                        for k, v in seq_len.items():
+                            seq_lengths[k] = [[vv] for vv in v]
+                    else:
+                        for k in seq_lengths.keys():
+                            for idx, v in enumerate(seq_len[k]):
+                                seq_lengths[k][idx].append(v)
+
                 except RuntimeError as e:
                     logger.exception(f"Caught RuntimeError: {e}")
                     continue
@@ -353,15 +360,29 @@ def run_eval(
                     break
             if n_samples and progress_bar.n == n_samples:
                 break
-        
-        print("Avg Input Seq Len: ", np.average([float(sl[0]) for sl in seq_lengths]))
-        print("Avg Output Seq Len: ", np.average([float(sl[1]) for sl in seq_lengths]))
-        print("Avg Decoding Step: ", np.average([float(sl[2]) for sl in seq_lengths]))
+
+        print(seq_lengths)
+        for k, v in seq_lengths.items():
+            print(k, " Avg Input Seq Len: ", np.average(v[0]))
+            print(k, " Avg Output Seq Len: ", np.average(v[1]))
+            print(k, " Avg Decoding Step: ", np.average(v[2]))
+            # seq_lengths[k] = [np.average(vv) for vv in v]
+
         dump_dir = "/fsx-atom/yejinlee/paper_submission_results/sequence_lengths/seamless/fleurs/"+ctx.task
         os.makedirs(dump_dir, exist_ok=True)
+        header = list()
         with open(dump_dir+"/seq_lengths.txt", "w") as f:
-            for sl in seq_lengths:
-                f.write("\t".join(sl)+"\n")
+            for k in seq_lengths.keys():
+                header += [k]*3
+            f.write("\t".join(header)+"\n")
+            write_str = ""
+            for i in range(len(list(seq_lengths.values())[0][0])):
+                for k, v in seq_lengths.items():
+                    for vv in v:
+                        write_str += str(vv[i])+"\t"
+                write_str += "\n"
+
+            f.write(write_str)
             print("Written to : /fsx-atom/yejinlee/paper_submission_results/sequence_lengths/seamless/fleurs/"+ctx.task+"/seq_lengths.txt")
             
     progress_bar.close()

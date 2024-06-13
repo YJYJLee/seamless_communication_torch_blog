@@ -291,6 +291,7 @@ class UnitYGenerator:
         if text_padding_mask is not None:
             text_padding_mask = text_padding_mask.trim(1)
 
+        seq_len_return["Decode"] = [text_seqs.shape[1]]
         # Use the output of the text generator to compute the decoder output.
         decoder_output, decoder_padding_mask = self.model.decode(
             text_seqs,
@@ -298,6 +299,7 @@ class UnitYGenerator:
             text_gen_output.encoder_output,
             text_gen_output.encoder_padding_mask,
         )
+        seq_len_return["Decode"] += [decoder_output.shape[1], 1]
 
         assert self.model.t2u_model is not None
         assert self.unit_decoder is not None
@@ -336,7 +338,7 @@ class UnitYGenerator:
                 unit_seq_list, self.model.t2u_model.target_vocab_info.pad_idx
             )
         else:
-            t2u_model_output, decoder_padding_mask, _ = self.model.t2u_model(
+            t2u_model_output, decoder_padding_mask, _, seq = self.model.t2u_model(
                 text_decoder_output=decoder_output,
                 text_decoder_padding_mask=decoder_padding_mask,
                 text_seqs=text_seqs,
@@ -349,6 +351,8 @@ class UnitYGenerator:
             unit_seqs = apply_padding_mask(
                 unit_seqs, decoder_padding_mask, t2u_model_output.vocab_info.pad_idx
             )
+            for k, v in seq.items():
+                seq_len_return[k] = v
 
         # Convert to speech units.
         units = self.unit_decoder(unit_seqs)

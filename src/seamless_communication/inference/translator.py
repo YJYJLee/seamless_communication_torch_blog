@@ -382,7 +382,6 @@ class Translator(nn.Module):
             return texts, None, seq_len_return
         else:
             assert units is not None
-            seq_len_return[1] = str(units.shape[-1])
 
             if isinstance(self.model.t2u_model, UnitYT2UModel):
                 # Remove the lang token for AR UnitY since the vocoder doesn't need it
@@ -405,9 +404,11 @@ class Translator(nn.Module):
                 speech_units.append(u.tolist())
 
             if self.vocoder is not None:
+                seq_len_return["Vocoder"] = [units.shape[1]]
                 translated_audio_wav = self.vocoder(
                     units, tgt_lang, spkr, dur_prediction=duration_prediction
                 )
+                seq_len_return["Vocoder"] += [translated_audio_wav.shape[-1], 1]
                 for i in range(len(units)):
                     padding_removed_audio_wav = translated_audio_wav[
                         i,

@@ -384,13 +384,17 @@ class UnitYNART2UModel(Module):
         duration_factor: float = 1.0,
         film_cond_emb: Optional[Tensor] = None,
     ) -> Tuple[SequenceModelOutput, Optional[PaddingMask], Tensor]:
+        seq_len = dict()
+        seq_len["NART_Encoder"] = [text_decoder_output.shape[1]]
         encoder_output, encoder_padding_mask = self.encode(
             text_decoder_output, text_decoder_padding_mask
         )
+        seq_len["NART_Encoder"] += [encoder_output.shape[1], 1]
 
         if self.prosody_proj is not None and film_cond_emb is not None:
             encoder_output = encoder_output + self.prosody_proj(film_cond_emb)
 
+        seq_len["NART_Decoder"] = [encoder_output.shape[1]]
         decoder_output, decoder_padding_mask, durations = self.decode(
             encoder_output,
             encoder_padding_mask,
@@ -398,8 +402,8 @@ class UnitYNART2UModel(Module):
             duration_factor,
             film_cond_emb,
         )
-
-        return self.project(decoder_output), decoder_padding_mask, durations
+        seq_len["NART_Decoder"] += [decoder_output.shape[1], 1]
+        return self.project(decoder_output), decoder_padding_mask, durations, seq_len
 
     def encode(
         self,
