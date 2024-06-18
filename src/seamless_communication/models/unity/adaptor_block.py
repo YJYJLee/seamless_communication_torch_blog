@@ -100,7 +100,7 @@ class UnitYEncoderAdaptor(TransformerEncoder):
         seqs: Tensor,
         padding_mask: Optional[PaddingMask],
     ) -> Tuple[Tensor, Optional[PaddingMask]]:
-        seqs, padding_mask, gpu_util = self.inner(seqs, padding_mask)
+        seqs, padding_mask = self.inner(seqs, padding_mask)
 
         if self.inner_layer_norm is not None:
             seqs = self.inner_layer_norm(seqs)
@@ -113,7 +113,7 @@ class UnitYEncoderAdaptor(TransformerEncoder):
 
         seqs = self.layer_norm(seqs)
 
-        return seqs, padding_mask, gpu_util
+        return seqs, padding_mask
 
     def _expand_contract(self, seqs: Tensor) -> Tensor:
         seqs = self.proj1(seqs)

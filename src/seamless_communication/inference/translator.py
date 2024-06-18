@@ -321,7 +321,7 @@ class Translator(nn.Module):
         # runtime = dict()
         # torch.cuda.synchronize()
         # start_time = time.time()
-        texts, units, seq_lengths, timer_result, gpu_util, memory_capa = self.get_prediction(
+        texts, units, timer_result = self.get_prediction(
             self.model,
             self.text_tokenizer,
             self.unit_tokenizer,
@@ -387,7 +387,7 @@ class Translator(nn.Module):
             # torch.cuda.synchronize()
             # runtime["Total"] = (time.time()-start_time)*1000
 
-            return texts, None, seq_lengths, timer_result, gpu_util, memory_capa
+            return texts, None, timer_result
         else:
             assert units is not None
 
@@ -403,7 +403,6 @@ class Translator(nn.Module):
 
             audio_wavs = []
             speech_units = []
-            seq_lengths["Vocoder"] = units.shape[1]
             torch.cuda.synchronize()
             start_time = time.time()
 
@@ -442,5 +441,5 @@ class Translator(nn.Module):
                     audio_wavs=audio_wavs,
                     sample_rate=sample_rate,
                 ),
-                seq_lengths, timer_result, gpu_util, memory_capa
+                timer_result
             )

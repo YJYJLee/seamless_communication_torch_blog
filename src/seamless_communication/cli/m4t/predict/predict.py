@@ -232,7 +232,7 @@ def main() -> None:
     else:
         translator_input = args.input
 
-    text_output, speech_output = translator.predict(
+    text_output, speech_output, _ = translator.predict(
         translator_input,
         args.task,
         args.tgt_lang,
