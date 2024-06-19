@@ -266,6 +266,36 @@ def run_eval(
         waveforms_dir = output_path / f"waveform_{ctx.data_file.stem}"
         waveforms_dir.mkdir(parents=True, exist_ok=True)
 
+
+    # Warmup
+    print("Warming up 15 Samples")
+    if ctx.task == "S2ST" or ctx.task == "S2TT":
+        warmup_src = {
+            'is_ragged': False,
+            'seqs': torch.rand([1,1054,80], dtype=torch.float16).cuda(), 
+            'seq_lens': 1
+        }
+    else:
+        warmup_src = {'is_ragged': False, 
+         'seqs': torch.tensor([[256022, 104990,  17862,    243,    321, 148787,  75155,    251,    411,
+                                1657,  38149,   1567,     70,    321,  56749,  27246,   2980, 119269,
+                                983,   1638,    243,   1497,  18117,      3]], device='cuda:0'), 
+        'seq_lens': torch.tensor([24], device='cuda:0')}
+        
+    for i in range(15):
+        (_, _, _) = translator.predict(
+            warmup_src,
+            ctx.task,
+            ctx.target_lang,
+            src_lang=ctx.source_lang,
+            text_generation_opts=ctx.text_generation_opts,
+            unit_generation_opts=ctx.unit_generation_opts,
+            unit_generation_ngram_filtering=ctx.unit_generation_ngram_filtering,
+        )
+    print("Finished Warming up")
+    # Warmup
+
+
     model_outputs_tsv = output_path / f"model-outputs-{ctx.data_file.stem}.txt"
     unit_outputs_tsv = output_path / f"unit_output-{ctx.data_file.stem}.txt"
     with open(model_outputs_tsv, "w") as hyp_file, open(
@@ -363,7 +393,10 @@ def run_eval(
             if n_samples and progress_bar.n == n_samples:
                 break
 
-    dump_dir = "/fsx-atom/yejinlee/paper_submission_results/latency_distribution/1gpu_1node/"+ctx.task+"/batch_size_"+str(ctx.batch_size)
+    disable_sdpa = os.environ.get('DISABLE_SDPA', False)
+
+    dump_dir = "/fsx-atom/yejinlee/paper_submission_results/latency_distribution_w_warmup/1gpu_1node/"+ctx.task+"/batch_size_"+str(ctx.batch_size) if not disable_sdpa \
+        else    "/fsx-atom/yejinlee/paper_submission_results/latency_distribution_w_warmup/wo_sdpa/1gpu_1node/"+ctx.task+"/batch_size_"+str(ctx.batch_size)
     os.makedirs(dump_dir, exist_ok=True)
     with open(dump_dir+"/timer_result.txt", "w") as f:
         f.write("\t".join(list(timer_results[0].keys()))+"\n")
