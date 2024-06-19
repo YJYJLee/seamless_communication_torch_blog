@@ -266,6 +266,28 @@ def run_eval(
         waveforms_dir = output_path / f"waveform_{ctx.data_file.stem}"
         waveforms_dir.mkdir(parents=True, exist_ok=True)
 
+
+    # Warmup
+    print("Warming up 15 Samples")
+    warmup_src = {
+        'is_ragged': False,
+        'seqs': torch.rand([1,1054,80], dtype=torch.float16).cuda(), 
+        'seq_lens': 1
+    }
+    for i in range(15):
+        (_, _, _, _, _, _) = translator.predict(
+            warmup_src,
+            ctx.task,
+            ctx.target_lang,
+            src_lang=ctx.source_lang,
+            text_generation_opts=ctx.text_generation_opts,
+            unit_generation_opts=ctx.unit_generation_opts,
+            unit_generation_ngram_filtering=ctx.unit_generation_ngram_filtering,
+        )
+    print("Finished Warming up")
+    # Warmup
+
+
     model_outputs_tsv = output_path / f"model-outputs-{ctx.data_file.stem}.txt"
     unit_outputs_tsv = output_path / f"unit_output-{ctx.data_file.stem}.txt"
     with open(model_outputs_tsv, "w") as hyp_file, open(
@@ -280,12 +302,13 @@ def run_eval(
             hyp_file.write("ref_tgt_text\tpred_tgt_text\n")
         iter_id = 0
         gpu_utils = list()
-        timer_results = dict()
         memory_capas = list()
-        seq_lengths = dict()
+        # timer_results = dict()
+        # seq_lengths = dict()
+        timer_results = list()
+        seq_lengths = list()
         for example in pipeline:
             valid_sequences: Optional[Tensor] = None
-            warmup = 15 if total_steps > ctx.batch_size*20 else 1
             if ctx.input_modality == Modality.SPEECH:
                 src = example["audio"]["data"]["fbank"]
                 # Skip corrupted audio tensors.
@@ -306,7 +329,6 @@ def run_eval(
                 # HACK:: Fix this bad handling
                 # RuntimeError: The sequence generator returned no hypothesis at index 2. Please file a bug report.
                 try:
-                    profile_cond = iter_id >= warmup and iter_id < warmup+5
                     (text_output, speech_output, seq_len, runtime, gpu_util, memory_capa) = translator.predict(
                         src,
                         ctx.task,
@@ -316,21 +338,22 @@ def run_eval(
                         unit_generation_opts=ctx.unit_generation_opts,
                         unit_generation_ngram_filtering=ctx.unit_generation_ngram_filtering,
                     )
-                    if profile_cond:
-                        gpu_utils.append(gpu_util)
-                        memory_capas.append(memory_capa)
-                        if len(timer_results)==0:
-                            for k, v in runtime.items():
-                                timer_results[k] = [v]
-                        else:
-                            for k in timer_results.keys():
-                                timer_results[k].append(runtime[k])
-                        if len(seq_lengths)==0:
-                            for k, v in seq_len.items():
-                                seq_lengths[k] = [v]
-                        else:
-                            for k in seq_lengths.keys():
-                                seq_lengths[k].append(seq_len[k])
+                    gpu_utils.append(gpu_util)
+                    memory_capas.append(memory_capa)
+                    timer_results.append(runtime)
+                    seq_lengths.append(seq_len)
+                    # if len(timer_results)==0:
+                    #     for k, v in runtime.items():
+                    #         timer_results[k] = [v]
+                    # else:
+                    #     for k in timer_results.keys():
+                    #         timer_results[k].append(runtime[k])
+                    # if len(seq_lengths)==0:
+                    #     for k, v in seq_len.items():
+                    #         seq_lengths[k] = [v]
+                    # else:
+                    #     for k in seq_lengths.keys():
+                    #         seq_lengths[k].append(seq_len[k])
 
                 except RuntimeError as e:
                     logger.exception(f"Caught RuntimeError: {e}")
@@ -373,24 +396,30 @@ def run_eval(
                 if n_samples and progress_bar.n == n_samples:
                     break
             iter_id += 1
-            if iter_id == warmup+5:
-                break
             if n_samples and progress_bar.n == n_samples:
                 break
     
-    for k, v in seq_lengths.items():
-        print("Avg "+k, ": ", np.average(v))
+    for k in seq_lengths[0].keys():
+        print("Avg "+k, ": ", np.average([seq_lengths[idx][k] for idx in range(len(seq_lengths))]))
 
     dump_dir = "/fsx-atom/yejinlee/sweep_final/1gpu_1node/"+ctx.task+"/batch_size_"+str(ctx.batch_size)
     os.makedirs(dump_dir, exist_ok=True)
     with open(dump_dir+"/seq_lengths.txt", "w") as f:
-        f.write("\t".join(list(seq_lengths.keys()))+"\n")
-        f.write("\t".join([str(np.average(v)) for v in seq_lengths.values()])+"\n")
+        write_str = "\t".join(list(seq_lengths[0].keys()))+"\n"
+        # f.write("\t".join(list(seq_lengths[0].keys()))+"\n")
+        # f.write("\t".join([str(np.average(v)) for v in seq_lengths.values()])+"\n")
+        for s in seq_lengths:
+            write_str += "\t".join([str(ss) for ss in s.values()]) + "\n"
+        f.write(write_str)
         print("Written to : ", dump_dir+"/seq_lengths.txt")
 
     with open(dump_dir+"/timer_result.txt", "w") as f:
-        f.write("\t".join(list(timer_results.keys()))+"\n")
-        f.write("\t".join([str(np.average(v)) for k, v in timer_results.items()]))
+        write_str = "\t".join(list(timer_results[0].keys()))+"\n"
+        # f.write("\t".join(list(timer_results[0].keys()))+"\n")
+        # f.write("\t".join([str(np.average(v)) for k, v in timer_results.items()]))
+        for t in timer_results:
+            write_str += "\t".join([str(tt) for tt in t.values()]) + "\n"
+        f.write(write_str)
     print("Written to : ", dump_dir+"/timer_result.txt")
 
     with open(dump_dir+"/memory_alloc.txt", "w") as f:
