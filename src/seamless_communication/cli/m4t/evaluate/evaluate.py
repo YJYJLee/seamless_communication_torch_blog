@@ -269,11 +269,19 @@ def run_eval(
 
     # Warmup
     print("Warming up 15 Samples")
-    warmup_src = {
-        'is_ragged': False,
-        'seqs': torch.rand([1,1054,80], dtype=torch.float16).cuda(), 
-        'seq_lens': 1
-    }
+    if ctx.task == "S2ST" or ctx.task == "S2TT":
+        warmup_src = {
+            'is_ragged': False,
+            'seqs': torch.rand([1,1054,80], dtype=torch.float16).cuda(), 
+            'seq_lens': 1
+        }
+    else:
+        warmup_src = {'is_ragged': False, 
+         'seqs': torch.tensor([[256022, 104990,  17862,    243,    321, 148787,  75155,    251,    411,
+                                1657,  38149,   1567,     70,    321,  56749,  27246,   2980, 119269,
+                                983,   1638,    243,   1497,  18117,      3]], device='cuda:0'), 
+        'seq_lens': torch.tensor([24], device='cuda:0')}
+        
     for i in range(15):
         (_, _, _, _, _, _) = translator.predict(
             warmup_src,
@@ -402,7 +410,7 @@ def run_eval(
     for k in seq_lengths[0].keys():
         print("Avg "+k, ": ", np.average([seq_lengths[idx][k] for idx in range(len(seq_lengths))]))
 
-    dump_dir = "/fsx-atom/yejinlee/sweep_final/1gpu_1node/"+ctx.task+"/batch_size_"+str(ctx.batch_size)
+    dump_dir = "/fsx-atom/yejinlee/paper_submission_results/radar_chart/1gpu_1node/"+ctx.task+"/batch_size_"+str(ctx.batch_size)
     os.makedirs(dump_dir, exist_ok=True)
     with open(dump_dir+"/seq_lengths.txt", "w") as f:
         write_str = "\t".join(list(seq_lengths[0].keys()))+"\n"

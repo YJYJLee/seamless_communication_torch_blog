@@ -226,7 +226,8 @@ class UnitYX2TModel(EncoderDecoderModel):
         self, seqs: Tensor, padding_mask: Optional[PaddingMask]
     ) -> Tuple[Tensor, Optional[PaddingMask]]:
         seqs, padding_mask = self.encoder_frontend(seqs, padding_mask)
-        return self.encoder(seqs, padding_mask)  # type: ignore[no-any-return]
+        seq_len = seqs.shape[1]
+        return self.encoder(seqs, padding_mask), seq_len  # type: ignore[no-any-return]
 
     @finaloverride
     def decode(
