@@ -314,7 +314,7 @@ def run_eval(
         # timer_results = dict()
         # seq_lengths = dict()
         timer_results = list()
-        seq_lengths = list()
+        seq_lengths = dict()
         for example in pipeline:
             valid_sequences: Optional[Tensor] = None
             if ctx.input_modality == Modality.SPEECH:
@@ -349,7 +349,7 @@ def run_eval(
                     gpu_utils.append(gpu_util)
                     memory_capas.append(memory_capa)
                     timer_results.append(runtime)
-                    seq_lengths.append(seq_len)
+                    # seq_lengths.append(seq_len)
                     # if len(timer_results)==0:
                     #     for k, v in runtime.items():
                     #         timer_results[k] = [v]
@@ -362,6 +362,14 @@ def run_eval(
                     # else:
                     #     for k in seq_lengths.keys():
                     #         seq_lengths[k].append(seq_len[k])
+
+                    if len(seq_lengths)==0:
+                        for k, v in seq_len.items():
+                            seq_lengths[k] = [[vv] for vv in v]
+                    else:
+                        for k in seq_lengths.keys():
+                            for idx, v in enumerate(seq_len[k]):
+                                seq_lengths[k][idx].append(v)
 
                 except RuntimeError as e:
                     logger.exception(f"Caught RuntimeError: {e}")
@@ -404,27 +412,37 @@ def run_eval(
                 if n_samples and progress_bar.n == n_samples:
                     break
             iter_id += 1
+            if iter_id==3:
+                break
             if n_samples and progress_bar.n == n_samples:
                 break
     
-    for k in seq_lengths[0].keys():
-        print("Avg "+k, ": ", np.average([seq_lengths[idx][k] for idx in range(len(seq_lengths))]))
-
+    for k, v in seq_lengths.items():
+        print(k, " Avg Input Seq Len: ", np.average(v[0]))
+        print(k, " Avg Output Seq Len: ", np.average(v[1]))
+        print(k, " Avg Decoding Step: ", np.average(v[2]))
     disable_sdpa = os.environ.get('DISABLE_SDPA', False)
 
     dump_dir = "/fsx-atom/yejinlee/paper_submission_results/radar_chart/1gpu_1node/"+ctx.task+"/batch_size_"+str(ctx.batch_size) if not disable_sdpa \
         else    "/fsx-atom/yejinlee/paper_submission_results/radar_chart/wo_sdpa/1gpu_1node/"+ctx.task+"/batch_size_"+str(ctx.batch_size)
     
     os.makedirs(dump_dir, exist_ok=True)
+    header = list()
     with open(dump_dir+"/seq_lengths.txt", "w") as f:
-        write_str = "\t".join(list(seq_lengths[0].keys()))+"\n"
-        # f.write("\t".join(list(seq_lengths[0].keys()))+"\n")
-        # f.write("\t".join([str(np.average(v)) for v in seq_lengths.values()])+"\n")
-        for s in seq_lengths:
-            write_str += "\t".join([str(ss) for ss in s.values()]) + "\n"
+        for k in seq_lengths.keys():
+            header += [k]*3
+        f.write("\t".join(header)+"\n")
+        write_str = ""
+        for i in range(len(list(seq_lengths.values())[0][0])):
+            for k, v in seq_lengths.items():
+                for vv in v:
+                    write_str += str(vv[i])+"\t"
+            write_str += "\n"
+
         f.write(write_str)
         print("Written to : ", dump_dir+"/seq_lengths.txt")
-
+        
+        
     with open(dump_dir+"/timer_result.txt", "w") as f:
         write_str = "\t".join(list(timer_results[0].keys()))+"\n"
         # f.write("\t".join(list(timer_results[0].keys()))+"\n")

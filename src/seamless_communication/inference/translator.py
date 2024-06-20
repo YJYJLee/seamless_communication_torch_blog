@@ -321,7 +321,7 @@ class Translator(nn.Module):
         # runtime = dict()
         # torch.cuda.synchronize()
         # start_time = time.time()
-        texts, units, seq_lengths, timer_result, gpu_util, memory_capa = self.get_prediction(
+        texts, units, seq_len_return, timer_result, gpu_util, memory_capa = self.get_prediction(
             self.model,
             self.text_tokenizer,
             self.unit_tokenizer,
@@ -387,7 +387,7 @@ class Translator(nn.Module):
             # torch.cuda.synchronize()
             # runtime["Total"] = (time.time()-start_time)*1000
 
-            return texts, None, seq_lengths, timer_result, gpu_util, memory_capa
+            return texts, None, seq_len_return, timer_result, gpu_util, memory_capa
         else:
             assert units is not None
 
@@ -403,7 +403,7 @@ class Translator(nn.Module):
 
             audio_wavs = []
             speech_units = []
-            seq_lengths["Vocoder"] = units.shape[1]
+            
             torch.cuda.synchronize()
             start_time = time.time()
 
@@ -416,9 +416,11 @@ class Translator(nn.Module):
                 speech_units.append(u.tolist())
 
             if self.vocoder is not None:
+                seq_len_return["Vocoder"] = [units.shape[1]]
                 translated_audio_wav = self.vocoder(
                     units, tgt_lang, spkr, dur_prediction=duration_prediction
                 )
+                seq_len_return["Vocoder"] += [translated_audio_wav.shape[-1], 1]
                 for i in range(len(units)):
                     padding_removed_audio_wav = translated_audio_wav[
                         i,
@@ -442,5 +444,5 @@ class Translator(nn.Module):
                     audio_wavs=audio_wavs,
                     sample_rate=sample_rate,
                 ),
-                seq_lengths, timer_result, gpu_util, memory_capa
+                seq_len_return, timer_result, gpu_util, memory_capa
             )

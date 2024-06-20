@@ -260,7 +260,7 @@ class UnitYGenerator:
         """
         gpu_utils = list()
         if input_modality == "speech":
-            texts, text_gen_output, timer_result, seq_lengths, gpu_util = self.s2t_converter.batch_convert(
+            texts, text_gen_output, timer_result, seq_len_return, gpu_util = self.s2t_converter.batch_convert(
                 source_seqs, source_padding_mask
             )
         elif input_modality == "text":
@@ -268,7 +268,7 @@ class UnitYGenerator:
                 raise ValueError(
                     "Please set `use_text_encoder` to `True` in your model config to encode text."
                 )
-            texts, text_gen_output, timer_result, seq_lengths, gpu_util = self.t2t_converter.batch_convert(
+            texts, text_gen_output, timer_result, seq_len_return, gpu_util = self.t2t_converter.batch_convert(
                 source_seqs, source_padding_mask
             )
         else:
@@ -278,7 +278,7 @@ class UnitYGenerator:
         
         # We skip T2U when we only need to output text.
         if output_modality == "text":
-            return texts, None, seq_lengths, timer_result, np.average(gpu_utils), torch.cuda.max_memory_allocated(torch.cuda.current_device())
+            return texts, None, seq_len_return, timer_result, np.average(gpu_utils), torch.cuda.max_memory_allocated(torch.cuda.current_device())
 
         assert self.model.target_vocab_info.pad_idx is not None
 
@@ -294,7 +294,7 @@ class UnitYGenerator:
         if text_padding_mask is not None:
             text_padding_mask = text_padding_mask.trim(1)
 
-        seq_lengths["Decode"] = text_seqs.shape[1]
+        seq_len_return["Decode"] = [text_seqs.shape[1]]
         torch.cuda.synchronize()
         start_time = time.time()
         # Use the output of the text generator to compute the decoder output.
@@ -307,7 +307,8 @@ class UnitYGenerator:
         torch.cuda.synchronize()
         timer_result["Decode"] = (time.time()-start_time)*1000
         gpu_utils += gpu_util
-
+        seq_len_return["Decode"] += [decoder_output.shape[1], 1]
+        
         assert self.model.t2u_model is not None
         assert self.unit_decoder is not None
 
@@ -366,7 +367,7 @@ class UnitYGenerator:
             )
             gpu_utils += gpu_util
             for k, v in seq.items():
-                seq_lengths[k] = v
+                seq_len_return[k] = v
 
         # Convert to speech units.      
         units = self.unit_decoder(unit_seqs)
@@ -382,4 +383,4 @@ class UnitYGenerator:
             arr = remove_consecutive_repeated_ngrams(units[0].tolist())
             units = torch.tensor(arr).to(units).unsqueeze(0)
 
-        return texts, units, seq_lengths, timer_result, np.average(gpu_utils), torch.cuda.max_memory_allocated(torch.cuda.current_device())
+        return texts, units, seq_len_return, timer_result, np.average(gpu_utils), torch.cuda.max_memory_allocated(torch.cuda.current_device())
