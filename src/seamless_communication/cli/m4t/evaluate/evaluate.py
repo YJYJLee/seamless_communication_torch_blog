@@ -410,7 +410,11 @@ def run_eval(
     for k in seq_lengths[0].keys():
         print("Avg "+k, ": ", np.average([seq_lengths[idx][k] for idx in range(len(seq_lengths))]))
 
-    dump_dir = "/fsx-atom/yejinlee/paper_submission_results/radar_chart/1gpu_1node/"+ctx.task+"/batch_size_"+str(ctx.batch_size)
+    disable_sdpa = os.environ.get('DISABLE_SDPA', False)
+
+    dump_dir = "/fsx-atom/yejinlee/paper_submission_results/radar_chart/1gpu_1node/"+ctx.task+"/batch_size_"+str(ctx.batch_size) if not disable_sdpa \
+        else    "/fsx-atom/yejinlee/paper_submission_results/radar_chart/wo_sdpa/1gpu_1node/"+ctx.task+"/batch_size_"+str(ctx.batch_size)
+    
     os.makedirs(dump_dir, exist_ok=True)
     with open(dump_dir+"/seq_lengths.txt", "w") as f:
         write_str = "\t".join(list(seq_lengths[0].keys()))+"\n"
