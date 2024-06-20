@@ -412,8 +412,7 @@ def run_eval(
                 if n_samples and progress_bar.n == n_samples:
                     break
             iter_id += 1
-            if iter_id==3:
-                break
+
             if n_samples and progress_bar.n == n_samples:
                 break
     
