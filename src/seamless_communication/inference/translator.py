@@ -155,6 +155,14 @@ class Translator(nn.Module):
             )
             self.vocoder.eval()
 
+            # https://github.com/pytorch/pytorch/issues/57289
+            self.vocoder.code_generator.remove_weight_norm()
+
+            self.compiled_vocoder = torch.compile(self.vocoder, mode='max-autotune', fullgraph=True)
+
+        self.compiled_text_decoder = [None, None]
+        self.s2t_model_list = list()
+        
     @classmethod
     def get_prediction(
         cls,
@@ -171,6 +179,8 @@ class Translator(nn.Module):
         unit_generation_ngram_filtering: bool = False,
         duration_factor: float = 1.0,
         prosody_encoder_input: Optional[SequenceData] = None,
+        compiled_text_decoder: Optional[list] = None,
+        s2t_model_list: Optional[list] = None
     ) -> Tuple[List[StringLike], Optional[Tensor]]:
         # We disregard unit generations opts for the NAR T2U decoder.
         if output_modality != Modality.SPEECH or isinstance(
@@ -185,6 +195,7 @@ class Translator(nn.Module):
             unit_tokenizer if output_modality == Modality.SPEECH else None,
             text_opts=text_generation_opts,
             unit_opts=unit_generation_opts,
+            s2t_model_list = s2t_model_list
         )
 
         return generator(
@@ -195,6 +206,8 @@ class Translator(nn.Module):
             ngram_filtering=unit_generation_ngram_filtering,
             duration_factor=duration_factor,
             prosody_encoder_input=prosody_encoder_input,
+            compiled_text_decoder = compiled_text_decoder,
+            s2t_model_list = s2t_model_list
         )
 
     @staticmethod
@@ -335,6 +348,8 @@ class Translator(nn.Module):
             unit_generation_ngram_filtering=unit_generation_ngram_filtering,
             duration_factor=duration_factor,
             prosody_encoder_input=prosody_encoder_input,
+            compiled_text_decoder = self.compiled_text_decoder,
+            s2t_model_list = self.s2t_model_list
         )
 
         if self.apply_mintox and task_str != Task.ASR.name:

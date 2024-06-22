@@ -42,6 +42,7 @@ from seamless_communication.inference import (
 
 import numpy as np
 import os 
+import time
 
 logging.basicConfig(
     level=logging.INFO,
@@ -267,34 +268,39 @@ def run_eval(
         waveforms_dir.mkdir(parents=True, exist_ok=True)
 
 
-    # Warmup
-    print("Warming up 15 Samples")
-    if ctx.task == "S2ST" or ctx.task == "S2TT":
-        warmup_src = {
-            'is_ragged': False,
-            'seqs': torch.rand([1,1054,80], dtype=torch.float16).cuda(), 
-            'seq_lens': 1
-        }
-    else:
-        warmup_src = {'is_ragged': False, 
-         'seqs': torch.tensor([[256022, 104990,  17862,    243,    321, 148787,  75155,    251,    411,
-                                1657,  38149,   1567,     70,    321,  56749,  27246,   2980, 119269,
-                                983,   1638,    243,   1497,  18117,      3]], device='cuda:0'), 
-        'seq_lens': torch.tensor([24], device='cuda:0')}
-        
-    for i in range(15):
-        (_, _, _) = translator.predict(
-            warmup_src,
-            ctx.task,
-            ctx.target_lang,
-            src_lang=ctx.source_lang,
-            text_generation_opts=ctx.text_generation_opts,
-            unit_generation_opts=ctx.unit_generation_opts,
-            unit_generation_ngram_filtering=ctx.unit_generation_ngram_filtering,
-        )
-    print("Finished Warming up")
-    # Warmup
-
+    # # Warmup
+    # print("Warming up 15 Samples")
+    # if ctx.task == "S2ST" or ctx.task == "S2TT":
+    #     warmup_src = {
+    #         'is_ragged': False,
+    #         'seqs': torch.rand([1,1054,80], dtype=torch.float16).cuda(), 
+    #         'seq_lens': 1
+    #     }
+    # else:
+    #     warmup_src = {'is_ragged': False, 
+    #      'seqs': torch.tensor([[256022, 104990,  17862,    243,    321, 148787,  75155,    251,    411,
+    #                             1657,  38149,   1567,     70,    321,  56749,  27246,   2980, 119269,
+    #                             983,   1638,    243,   1497,  18117,      3]], device='cuda:0'), 
+    #     'seq_lens': torch.tensor([24], device='cuda:0')}
+    
+    # timer_result = list()
+    # for i in range(15):
+    #     text_output, speech_output, runtime = translator.predict(
+    #         warmup_src,
+    #         ctx.task,
+    #         ctx.target_lang,
+    #         src_lang=ctx.source_lang,
+    #         text_generation_opts=ctx.text_generation_opts,
+    #         unit_generation_opts=ctx.unit_generation_opts,
+    #         unit_generation_ngram_filtering=ctx.unit_generation_ngram_filtering,
+    #     )
+    #     timer_result.append(runtime)
+    #     print(runtime)
+    #     print(text_output)
+    # # print("AVG:" , np.average(timer_result))
+    # print("Finished Warming up")
+    # # Warmup
+    # exit(0)
 
     model_outputs_tsv = output_path / f"model-outputs-{ctx.data_file.stem}.txt"
     unit_outputs_tsv = output_path / f"unit_output-{ctx.data_file.stem}.txt"
@@ -342,6 +348,7 @@ def run_eval(
                         unit_generation_ngram_filtering=ctx.unit_generation_ngram_filtering,
                     )
                     timer_results.append(runtime)
+                    print(text_output)
                     # if len(timer_results)==0:
                     #     for k, v in runtime.items():
                     #         timer_results[k] = [v]
@@ -392,7 +399,7 @@ def run_eval(
             iter_id += 1
             if n_samples and progress_bar.n == n_samples:
                 break
-
+    exit(0)
     disable_sdpa = os.environ.get('DISABLE_SDPA', False)
 
     dump_dir = "/fsx-atom/yejinlee/paper_submission_results/latency_distribution_w_warmup/1gpu_1node/"+ctx.task+"/batch_size_"+str(ctx.batch_size) if not disable_sdpa \
