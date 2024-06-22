@@ -142,6 +142,7 @@ class UnitYGenerator:
                 decoder=model.text_decoder,
                 final_proj=model.final_proj,
                 target_vocab_info=model.target_vocab_info,
+                beam_size=text_opts.beam_size,
             )
             s2t_model_list.append(s2t_model)
 

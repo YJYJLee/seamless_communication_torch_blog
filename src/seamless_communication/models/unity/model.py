@@ -209,6 +209,7 @@ class UnitYX2TModel(EncoderDecoderModel):
         decoder: TransformerDecoder,
         final_proj: Projection,
         target_vocab_info: VocabularyInfo,
+        beam_size: int
     ) -> None:
         model_dim = encoder.model_dim
 
@@ -220,6 +221,7 @@ class UnitYX2TModel(EncoderDecoderModel):
         self.decoder = decoder
         self.final_proj = final_proj
         self.target_vocab_info = target_vocab_info
+        self.beam_size = beam_size
 
     @finaloverride
     def encode(
@@ -253,6 +255,7 @@ class UnitYX2TModel(EncoderDecoderModel):
                 state_bag=state_bag,
                 cuda_graph_mask=cuda_graph_mask,
                 valid_seq_pos=valid_seq_pos,
+                beam_size=self.beam_size
             )
         else:
             return self.decoder(  # type: ignore[no-any-return]
@@ -263,6 +266,7 @@ class UnitYX2TModel(EncoderDecoderModel):
                 state_bag=state_bag,
                 cuda_graph_mask=cuda_graph_mask,
                 valid_seq_pos=valid_seq_pos,
+                beam_size=self.beam_size
             )
 
     @finaloverride

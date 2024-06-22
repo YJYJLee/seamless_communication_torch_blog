@@ -272,16 +272,17 @@ def run_eval(
     print("Warming up 15 Samples")
     if ctx.task == "S2ST" or ctx.task == "S2TT":
         warmup_src = {
-            'is_ragged': False,
-            'seqs': torch.rand([ctx.batch_size,1054,80], dtype=torch.float16).cuda(), 
-            'seq_lens': 1
+            'is_ragged': True,
+            'seqs': torch.rand([ctx.batch_size,1144,80], dtype=torch.float16).cuda(), 
+            'seq_lens': torch.tensor([1054], device='cuda:0').repeat(ctx.batch_size, 1).reshape(ctx.batch_size)
+            # 'seq_lens': torch.tensor([1054,  874, 1144,  574], device='cuda:0')
         }
     else:
         warmup_src = {'is_ragged': False, 
          'seqs': torch.tensor([[256022, 104990,  17862,    243,    321, 148787,  75155,    251,    411,
                                 1657,  38149,   1567,     70,    321,  56749,  27246,   2980, 119269,
                                 983,   1638,    243,   1497,  18117,      3]], device='cuda:0').repeat(ctx.batch_size, 1), 
-        'seq_lens': torch.tensor([24], device='cuda:0')}
+        'seq_lens': torch.tensor([24], device='cuda:0').repeat(ctx.batch_size, 1).reshape(ctx.batch_size)}
     
     timer_result = list()
     for i in range(15):
@@ -348,6 +349,7 @@ def run_eval(
                         unit_generation_ngram_filtering=ctx.unit_generation_ngram_filtering,
                     )
                     timer_results.append(runtime)
+                    print(runtime)
                     print(text_output)
                     # if len(timer_results)==0:
                     #     for k, v in runtime.items():
