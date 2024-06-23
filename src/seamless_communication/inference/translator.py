@@ -161,6 +161,7 @@ class Translator(nn.Module):
             self.compiled_vocoder = torch.compile(self.vocoder, mode='max-autotune', fullgraph=True)
 
         self.compiled_text_decoder = [None, None]
+
         self.s2t_model_list = list()
         
     @classmethod
@@ -180,7 +181,7 @@ class Translator(nn.Module):
         duration_factor: float = 1.0,
         prosody_encoder_input: Optional[SequenceData] = None,
         compiled_text_decoder: Optional[list] = None,
-        s2t_model_list: Optional[list] = None
+        s2t_model_list: Optional[list] = None,
     ) -> Tuple[List[StringLike], Optional[Tensor]]:
         # We disregard unit generations opts for the NAR T2U decoder.
         if output_modality != Modality.SPEECH or isinstance(
@@ -197,6 +198,18 @@ class Translator(nn.Module):
             unit_opts=unit_generation_opts,
             s2t_model_list = s2t_model_list
         )
+        if compiled_text_decoder[0]==None and compiled_text_decoder[1]==None:
+            assert len(s2t_model_list)==1
+            
+            compiled_text_decoder[0] = s2t_model_list[0].decoder.forward
+            import os
+            compile = int(os.environ.get('TORCH_COMPILE', 0))
+
+            if not compile:
+                compiled_text_decoder[1] = s2t_model_list[0].decoder.forward2
+            else:
+                print("COMPILE REGISTERED")
+                compiled_text_decoder[1] = torch.compile(s2t_model_list[0].decoder.forward2, mode='max-autotune', fullgraph=True)
 
         return generator(
             seqs,
@@ -349,7 +362,7 @@ class Translator(nn.Module):
             duration_factor=duration_factor,
             prosody_encoder_input=prosody_encoder_input,
             compiled_text_decoder = self.compiled_text_decoder,
-            s2t_model_list = self.s2t_model_list
+            s2t_model_list = self.s2t_model_list,
         )
 
         if self.apply_mintox and task_str != Task.ASR.name:
@@ -430,8 +443,9 @@ class Translator(nn.Module):
                 speech_units.append(u.tolist())
 
             if self.vocoder is not None:
+                temp_unit = torch.cat((units, torch.zeros((units.shape[0], 835-units.shape[1]), device=units.device, dtype=units.dtype)), -1)
                 translated_audio_wav = self.vocoder(
-                    units, tgt_lang, spkr, dur_prediction=duration_prediction
+                    temp_unit, tgt_lang, spkr, dur_prediction=duration_prediction
                 )
                 for i in range(len(units)):
                     padding_removed_audio_wav = translated_audio_wav[

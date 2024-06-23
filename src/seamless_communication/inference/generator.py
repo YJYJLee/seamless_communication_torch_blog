@@ -134,7 +134,7 @@ class UnitYGenerator:
         assert model.text_decoder_frontend is not None
         assert model.final_proj is not None
 
-        if len(s2t_model_list)==0:
+        if len(s2t_model_list)==0 and model.text_encoder is None:
             s2t_model = UnitYX2TModel(
                 encoder_frontend=model.speech_encoder_frontend,
                 encoder=model.speech_encoder,
@@ -149,37 +149,41 @@ class UnitYGenerator:
         step_processors = []
         if text_opts.step_processor is not None:
             step_processors.append(text_opts.step_processor)
-
-        generator = BeamSearchSeq2SeqGenerator(
-            # s2t_model,
-            s2t_model_list[0],
-            beam_size=text_opts.beam_size,
-            max_gen_len=text_opts.soft_max_seq_len,
-            max_seq_len=text_opts.hard_max_seq_len,
-            echo_prompt=True,
-            step_processors=step_processors,
-            unk_penalty=text_opts.unk_penalty,
-            len_penalty=text_opts.len_penalty,
-        )
-        self.s2t_converter = SequenceToTextConverter(
-            generator, text_tokenizer, "translation", target_lang
-        )
+        if model.text_encoder is None:
+            generator = BeamSearchSeq2SeqGenerator(
+                # s2t_model,
+                s2t_model_list[0],
+                beam_size=text_opts.beam_size,
+                max_gen_len=text_opts.soft_max_seq_len,
+                max_seq_len=text_opts.hard_max_seq_len,
+                echo_prompt=True,
+                step_processors=step_processors,
+                unk_penalty=text_opts.unk_penalty,
+                len_penalty=text_opts.len_penalty,
+            )
+            self.s2t_converter = SequenceToTextConverter(
+                generator, text_tokenizer, "translation", target_lang
+            )
 
         if model.text_encoder is None:
             self.t2t_generator = None
         else:
             assert model.text_encoder_frontend is not None
             assert model.text_encoder is not None
-            t2t_model = UnitYX2TModel(
-                encoder_frontend=model.text_encoder_frontend,
-                encoder=model.text_encoder,
-                decoder_frontend=model.text_decoder_frontend,
-                decoder=model.text_decoder,
-                final_proj=model.final_proj,
-                target_vocab_info=model.target_vocab_info,
-            )
+            if len(s2t_model_list)==0:
+                t2t_model = UnitYX2TModel(
+                    encoder_frontend=model.text_encoder_frontend,
+                    encoder=model.text_encoder,
+                    decoder_frontend=model.text_decoder_frontend,
+                    decoder=model.text_decoder,
+                    final_proj=model.final_proj,
+                    target_vocab_info=model.target_vocab_info,
+                    beam_size=text_opts.beam_size,
+                )
+                s2t_model_list.append(t2t_model)
             generator = BeamSearchSeq2SeqGenerator(
-                t2t_model,
+                # t2t_model,
+                s2t_model_list[0],
                 beam_size=text_opts.beam_size,
                 max_gen_len=text_opts.soft_max_seq_len,
                 max_seq_len=text_opts.hard_max_seq_len,

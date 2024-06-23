@@ -268,23 +268,25 @@ def run_eval(
         waveforms_dir.mkdir(parents=True, exist_ok=True)
 
 
+    effective_batch_size = int(os.environ.get('EFFECTIVE_BATCH_SIZE', 1))
+    compile = int(os.environ.get('TORCH_COMPILE', 0))
+
     # Warmup
     print("Warming up 15 Samples")
     if ctx.task == "S2ST" or ctx.task == "S2TT":
         warmup_src = {
-            'is_ragged': True,
-            'seqs': torch.rand([ctx.batch_size,1144,80], dtype=torch.float16).cuda(), 
-            'seq_lens': torch.tensor([1054], device='cuda:0').repeat(ctx.batch_size, 1).reshape(ctx.batch_size)
+            'is_ragged': True if effective_batch_size>1 else False, 
+            'seqs': torch.rand([effective_batch_size,1144,80], dtype=torch.float16).cuda(), 
+            'seq_lens': torch.tensor([1054], device='cuda:0').repeat(effective_batch_size, 1).reshape(effective_batch_size)
             # 'seq_lens': torch.tensor([1054,  874, 1144,  574], device='cuda:0')
         }
     else:
-        warmup_src = {'is_ragged': False, 
+        warmup_src = {'is_ragged': True if effective_batch_size>1 else False, 
          'seqs': torch.tensor([[256022, 104990,  17862,    243,    321, 148787,  75155,    251,    411,
                                 1657,  38149,   1567,     70,    321,  56749,  27246,   2980, 119269,
-                                983,   1638,    243,   1497,  18117,      3]], device='cuda:0').repeat(ctx.batch_size, 1), 
-        'seq_lens': torch.tensor([24], device='cuda:0').repeat(ctx.batch_size, 1).reshape(ctx.batch_size)}
+                                983,   1638,    243,   1497,  18117,      3]], device='cuda:0').repeat(effective_batch_size, 1), 
+        'seq_lens': torch.tensor([24], device='cuda:0').repeat(effective_batch_size, 1).reshape(effective_batch_size)}
     
-    timer_result = list()
     for i in range(15):
         text_output, speech_output, runtime = translator.predict(
             warmup_src,
@@ -295,13 +297,11 @@ def run_eval(
             unit_generation_opts=ctx.unit_generation_opts,
             unit_generation_ngram_filtering=ctx.unit_generation_ngram_filtering,
         )
-        timer_result.append(runtime)
-        print(runtime)
-        print(text_output)
-    # print("AVG:" , np.average(timer_result))
+        # timer_result.append(runtime)
+        # print(runtime)
+        # print(text_output)
     print("Finished Warming up")
     # Warmup
-    exit(0)
 
     model_outputs_tsv = output_path / f"model-outputs-{ctx.data_file.stem}.txt"
     unit_outputs_tsv = output_path / f"unit_output-{ctx.data_file.stem}.txt"
@@ -339,6 +339,10 @@ def run_eval(
                 # HACK:: Fix this bad handling
                 # RuntimeError: The sequence generator returned no hypothesis at index 2. Please file a bug report.
                 try:
+                    src = {'is_ragged': True if effective_batch_size>1 else False, 
+                            'seqs': src['seqs'].repeat(effective_batch_size, 1, 1) if ctx.input_modality == Modality.SPEECH else src['seqs'].repeat(effective_batch_size, 1),
+                            'seq_lens': src['seq_lens'].repeat(effective_batch_size) if ctx.input_modality == Modality.SPEECH else src['seq_lens'].repeat(effective_batch_size, 1).reshape(effective_batch_size)}
+
                     (text_output, speech_output, runtime) = translator.predict(
                         src,
                         ctx.task,
@@ -375,24 +379,24 @@ def run_eval(
                     speech_output,
                 )
 
-            hyps = [str(s) for s in text_output]
-            refs = [str(s) for s in example[ctx.ref_field]]
+            # hyps = [str(s) for s in text_output]
+            # refs = [str(s) for s in example[ctx.ref_field]]
 
-            for i in range(len(text_output)):
-                if ctx.output_modality == Modality.SPEECH:
-                    assert speech_output is not None
-                    u = speech_output.units[i]
-                    str_units = [str(i) for i in u]
-                    unit_file.write(" ".join(str_units) + "\n")
-                    wav_fp = str(waveforms_dir / f"{sample_id}_pred.wav")
-                    torchaudio.save(
-                        wav_fp,
-                        speech_output.audio_wavs[i][0].to(torch.float32).cpu(),
-                        sample_rate=speech_output.sample_rate,
-                    )
-                    hyp_file.write(f"{refs[i]}\t{hyps[i]}\t{wav_fp}\n")
-                else:
-                    hyp_file.write(f"{refs[i]}\t{hyps[i]}\n")
+            # for i in range(len(text_output)):
+            #     if ctx.output_modality == Modality.SPEECH:
+            #         assert speech_output is not None
+            #         u = speech_output.units[i]
+            #         str_units = [str(i) for i in u]
+            #         unit_file.write(" ".join(str_units) + "\n")
+            #         wav_fp = str(waveforms_dir / f"{sample_id}_pred.wav")
+            #         torchaudio.save(
+            #             wav_fp,
+            #             speech_output.audio_wavs[i][0].to(torch.float32).cpu(),
+            #             sample_rate=speech_output.sample_rate,
+            #         )
+            #         hyp_file.write(f"{refs[i]}\t{hyps[i]}\t{wav_fp}\n")
+            #     else:
+            #         hyp_file.write(f"{refs[i]}\t{hyps[i]}\n")
 
                 sample_id += 1
                 progress_bar.update(1)
@@ -401,12 +405,13 @@ def run_eval(
             iter_id += 1
             if n_samples and progress_bar.n == n_samples:
                 break
-    exit(0)
-    disable_sdpa = os.environ.get('DISABLE_SDPA', False)
 
-    dump_dir = "/fsx-atom/yejinlee/paper_submission_results/latency_distribution_w_warmup/1gpu_1node/"+ctx.task+"/batch_size_"+str(ctx.batch_size) if not disable_sdpa \
-        else    "/fsx-atom/yejinlee/paper_submission_results/latency_distribution_w_warmup/wo_sdpa/1gpu_1node/"+ctx.task+"/batch_size_"+str(ctx.batch_size)
+    # disable_sdpa = os.environ.get('DISABLE_SDPA', False)
+
+    dump_dir = "/fsx-atom/yejinlee/paper_submission_results/torch_compile/1gpu_1node/"+ctx.task+"/batch_size_"+str(effective_batch_size) if compile \
+        else "/fsx-atom/yejinlee/paper_submission_results/torch_compile_baseline/1gpu_1node/"+ctx.task+"/batch_size_"+str(effective_batch_size)
     os.makedirs(dump_dir, exist_ok=True)
+
     with open(dump_dir+"/timer_result.txt", "w") as f:
         f.write("\t".join(list(timer_results[0].keys()))+"\n")
         write_str=""
