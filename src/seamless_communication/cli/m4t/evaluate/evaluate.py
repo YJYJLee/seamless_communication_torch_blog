@@ -268,7 +268,9 @@ def run_eval(
         waveforms_dir.mkdir(parents=True, exist_ok=True)
 
 
-    effective_batch_size = int(os.environ.get('EFFECTIVE_BATCH_SIZE', 1))
+    effective_batch_size = int(os.environ.get('EFFECTIVE_BATCH_SIZE', -1))
+    if effective_batch_size==-1:
+        assert False
     compile = int(os.environ.get('TORCH_COMPILE', 0))
 
     # Warmup
