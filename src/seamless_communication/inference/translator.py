@@ -188,7 +188,6 @@ class Translator(nn.Module):
         prosody_encoder_input: Optional[SequenceData] = None,
         compiled_text_decoder: Optional[list] = None,
         s2t_model_list: Optional[list] = None,
-        initial_run=False
     ) -> Tuple[List[StringLike], Optional[Tensor]]:
         # We disregard unit generations opts for the NAR T2U decoder.
         if output_modality != Modality.SPEECH or isinstance(
@@ -229,7 +228,6 @@ class Translator(nn.Module):
             prosody_encoder_input=prosody_encoder_input,
             compiled_text_decoder = compiled_text_decoder,
             s2t_model_list = s2t_model_list,
-            initial_run=initial_run
         )
 
     @staticmethod
@@ -264,7 +262,6 @@ class Translator(nn.Module):
         duration_factor: float = 1.0,
         prosody_encoder_input: Optional[SequenceData] = None,
         src_text: Optional[StringLike] = None,
-        initial_run = False
     ) -> Tuple[List[StringLike], Optional[BatchedSpeechOutput]]:
         """
         The main method used to perform inference on all tasks.
@@ -373,7 +370,6 @@ class Translator(nn.Module):
             prosody_encoder_input=prosody_encoder_input,
             compiled_text_decoder = self.compiled_text_decoder,
             s2t_model_list = self.s2t_model_list,
-            initial_run=initial_run
         )
 
         if self.apply_mintox and task_str != Task.ASR.name:
