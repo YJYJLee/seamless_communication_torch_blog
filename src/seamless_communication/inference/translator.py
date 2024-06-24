@@ -155,10 +155,15 @@ class Translator(nn.Module):
             )
             self.vocoder.eval()
 
-            # https://github.com/pytorch/pytorch/issues/57289
-            self.vocoder.code_generator.remove_weight_norm()
 
-            self.compiled_vocoder = torch.compile(self.vocoder, mode='max-autotune', fullgraph=True)
+            import os
+            self.compile = int(os.environ.get('TORCH_COMPILE', 0))
+
+            if self.compile:
+                # https://github.com/pytorch/pytorch/issues/57289
+                self.vocoder.code_generator.remove_weight_norm()
+
+                self.compiled_vocoder = torch.compile(self.vocoder, mode='max-autotune', fullgraph=True)
 
         self.compiled_text_decoder = [None, None]
 
@@ -443,9 +448,10 @@ class Translator(nn.Module):
                 speech_units.append(u.tolist())
 
             if self.vocoder is not None:
-                temp_unit = torch.cat((units, torch.zeros((units.shape[0], 835-units.shape[1]), device=units.device, dtype=units.dtype)), -1)
+                if self.compile:
+                    units = torch.cat((units, torch.zeros((units.shape[0], 835-units.shape[1]), device=units.device, dtype=units.dtype)), -1)
                 translated_audio_wav = self.vocoder(
-                    temp_unit, tgt_lang, spkr, dur_prediction=duration_prediction
+                    units, tgt_lang, spkr, dur_prediction=duration_prediction
                 )
                 for i in range(len(units)):
                     padding_removed_audio_wav = translated_audio_wav[
