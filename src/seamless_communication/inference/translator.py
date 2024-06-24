@@ -43,6 +43,7 @@ from seamless_communication.toxicity import (
 from seamless_communication.toxicity.mintox import mintox_pipeline
 
 import time
+import os
 
 logging.basicConfig(
     level=logging.INFO,
@@ -157,7 +158,7 @@ class Translator(nn.Module):
 
 
             import os
-            self.compile = int(os.environ.get('TORCH_COMPILE', 0))
+            self.compile = os.environ.get('TORCH_COMPILE', False)
 
             if self.compile:
                 # https://github.com/pytorch/pytorch/issues/57289
@@ -187,6 +188,7 @@ class Translator(nn.Module):
         prosody_encoder_input: Optional[SequenceData] = None,
         compiled_text_decoder: Optional[list] = None,
         s2t_model_list: Optional[list] = None,
+        initial_run=False
     ) -> Tuple[List[StringLike], Optional[Tensor]]:
         # We disregard unit generations opts for the NAR T2U decoder.
         if output_modality != Modality.SPEECH or isinstance(
@@ -207,8 +209,9 @@ class Translator(nn.Module):
             assert len(s2t_model_list)==1
             
             compiled_text_decoder[0] = s2t_model_list[0].decoder.forward
-            import os
-            compile = int(os.environ.get('TORCH_COMPILE', 0))
+            # compiled_text_decoder[1] = s2t_model_list[0].decoder.forward2
+
+            compile = os.environ.get('TORCH_COMPILE', False)
 
             if not compile:
                 compiled_text_decoder[1] = s2t_model_list[0].decoder.forward2
@@ -225,7 +228,8 @@ class Translator(nn.Module):
             duration_factor=duration_factor,
             prosody_encoder_input=prosody_encoder_input,
             compiled_text_decoder = compiled_text_decoder,
-            s2t_model_list = s2t_model_list
+            s2t_model_list = s2t_model_list,
+            initial_run=initial_run
         )
 
     @staticmethod
@@ -260,6 +264,7 @@ class Translator(nn.Module):
         duration_factor: float = 1.0,
         prosody_encoder_input: Optional[SequenceData] = None,
         src_text: Optional[StringLike] = None,
+        initial_run = False
     ) -> Tuple[List[StringLike], Optional[BatchedSpeechOutput]]:
         """
         The main method used to perform inference on all tasks.
@@ -368,6 +373,7 @@ class Translator(nn.Module):
             prosody_encoder_input=prosody_encoder_input,
             compiled_text_decoder = self.compiled_text_decoder,
             s2t_model_list = self.s2t_model_list,
+            initial_run=initial_run
         )
 
         if self.apply_mintox and task_str != Task.ASR.name:

@@ -43,6 +43,7 @@ from seamless_communication.inference import (
 import numpy as np
 import os 
 import time
+import torchao
 
 logging.basicConfig(
     level=logging.INFO,
@@ -271,42 +272,64 @@ def run_eval(
     effective_batch_size = int(os.environ.get('EFFECTIVE_BATCH_SIZE', -1))
     if effective_batch_size==-1:
         assert False
-    compile = int(os.environ.get('TORCH_COMPILE', 0))
 
-    # Warmup
-    print("Warming up 15 Samples")
-    if ctx.task == "S2ST" or ctx.task == "S2TT":
-        warmup_src = {
-            # 'is_ragged': True if effective_batch_size>1 else False, 
-            'is_ragged': False,
-            'seqs': torch.rand([1,1144,80], dtype=torch.float16).repeat(effective_batch_size, 1, 1).cuda(), 
-            'seq_lens': torch.tensor([1054], device='cuda:0').repeat(effective_batch_size, 1).reshape(effective_batch_size)
-        }
-    else:
-        warmup_src = {
-            # 'is_ragged': True if effective_batch_size>1 else False, 
-            'is_ragged': False,
-            'seqs': torch.tensor([[256022, 104990,  17862,    243,    321, 148787,  75155,    251,    411,
-                                    1657,  38149,   1567,     70,    321,  56749,  27246,   2980, 119269,
-                                    983,   1638,    243,   1497,  18117,      3]], device='cuda:0').repeat(effective_batch_size, 1), 
-            'seq_lens': torch.tensor([24], device='cuda:0').repeat(effective_batch_size, 1).reshape(effective_batch_size)
-        }
-    
-    for i in range(15):
-        text_output, speech_output, runtime = translator.predict(
-            warmup_src,
-            ctx.task,
-            ctx.target_lang,
-            src_lang=ctx.source_lang,
-            text_generation_opts=ctx.text_generation_opts,
-            unit_generation_opts=ctx.unit_generation_opts,
-            unit_generation_ngram_filtering=ctx.unit_generation_ngram_filtering,
-        )
-        # timer_result.append(runtime)
-        # print(runtime)
-        # print(text_output)
-    print("Finished Warming up")
-    # Warmup
+    # if ctx.task == "S2ST" or ctx.task == "S2TT":
+    #     warmup_src = {
+    #         # 'is_ragged': True if effective_batch_size>1 else False, 
+    #         'is_ragged': False,
+    #         'seqs': torch.rand([1,1144,80], dtype=torch.float16).repeat(effective_batch_size, 1, 1).cuda(), 
+    #         'seq_lens': torch.tensor([1054], device='cuda:0').repeat(effective_batch_size, 1).reshape(effective_batch_size)
+    #     }
+    # else:
+    #     warmup_src = {
+    #         # 'is_ragged': True if effective_batch_size>1 else False, 
+    #         'is_ragged': False,
+    #         'seqs': torch.tensor([[256022, 104990,  17862,    243,    321, 148787,  75155,    251,    411,
+    #                                 1657,  38149,   1567,     70,    321,  56749,  27246,   2980, 119269,
+    #                                 983,   1638,    243,   1497,  18117,      3]], device='cuda:0').repeat(effective_batch_size, 1), 
+    #         'seq_lens': torch.tensor([24], device='cuda:0').repeat(effective_batch_size, 1).reshape(effective_batch_size)
+    #     }
+
+    # print("Initial Run Start")
+    # #  Run once to instantiate the model
+    # text_output, speech_output, runtime = translator.predict(
+    #     warmup_src,
+    #     ctx.task,
+    #     ctx.target_lang,
+    #     src_lang=ctx.source_lang,
+    #     text_generation_opts=ctx.text_generation_opts,
+    #     unit_generation_opts=ctx.unit_generation_opts,
+    #     unit_generation_ngram_filtering=ctx.unit_generation_ngram_filtering,
+    #     initial_run=True
+    # )
+    # print("Initial Run End")
+
+    # quant = os.environ.get('AUTOQUANT', False)
+    # if quant:
+    #     translator.s2t_model_list[0] = torchao.autoquant(translator.s2t_model_list[0])
+
+    #     print("Autoquant shape calibration start") 
+    #     translator.predict(
+    #         warmup_src,
+    #         ctx.task,
+    #         ctx.target_lang,
+    #         src_lang=ctx.source_lang,
+    #         text_generation_opts=ctx.text_generation_opts,
+    #         unit_generation_opts=ctx.unit_generation_opts,
+    #         unit_generation_ngram_filtering=ctx.unit_generation_ngram_filtering,
+    #     )
+
+
+    #     print("Autoquant benchmarking Start") 
+    #     # do autoquantization
+    #     translator.s2t_model_list[0].do_autoquant()
+
+    # compile = os.environ.get('TORCH_COMPILE', False)
+    # if compile:
+    #     print("COMPILE REGISTERED")
+    #     translator.compiled_text_decoder[1] = torch.compile(translator.s2t_model_list[0].decoder.forward2, mode='max-autotune', fullgraph=True)
+
+
 
     model_outputs_tsv = output_path / f"model-outputs-{ctx.data_file.stem}.txt"
     unit_outputs_tsv = output_path / f"unit_output-{ctx.data_file.stem}.txt"
@@ -411,9 +434,9 @@ def run_eval(
             if n_samples and progress_bar.n == n_samples:
                 break
 
-    # disable_sdpa = os.environ.get('DISABLE_SDPA', False)
 
-    dump_dir = "/fsx-atom/yejinlee/paper_submission_results/torch_compile/1gpu_1node/"+ctx.task+"/batch_size_"+str(effective_batch_size) if compile \
+    quant_str = "_autoquant" if quant else ""
+    dump_dir = "/fsx-atom/yejinlee/paper_submission_results/torch_compile"+str(quant_str)+"/1gpu_1node/"+ctx.task+"/batch_size_"+str(effective_batch_size) if compile \
         else "/fsx-atom/yejinlee/paper_submission_results/torch_compile_baseline/1gpu_1node/"+ctx.task+"/batch_size_"+str(effective_batch_size)
     os.makedirs(dump_dir, exist_ok=True)
 

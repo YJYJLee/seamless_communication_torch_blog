@@ -246,7 +246,8 @@ class UnitYGenerator:
         duration_factor: float = 1.0,
         prosody_encoder_input: Optional[SequenceData] = None,
         compiled_text_decoder: Optional[list] = None,
-        s2t_model_list: Optional[list] = None
+        s2t_model_list: Optional[list] = None,
+        initial_run = False
     ) -> Tuple[List[StringLike], Optional[Tensor]]:
         """
         :param source_seqs:
@@ -271,7 +272,7 @@ class UnitYGenerator:
         """
         if input_modality == "speech":
             texts, text_gen_output, timer_result = self.s2t_converter.batch_convert(
-                source_seqs, source_padding_mask, compiled_text_decoder=compiled_text_decoder, s2t_model_list=s2t_model_list
+                source_seqs, source_padding_mask, compiled_text_decoder=compiled_text_decoder, s2t_model_list=s2t_model_list, initial_run=initial_run
             )
         elif input_modality == "text":
             if self.t2t_converter is None:
@@ -279,7 +280,7 @@ class UnitYGenerator:
                     "Please set `use_text_encoder` to `True` in your model config to encode text."
                 )
             texts, text_gen_output, timer_result = self.t2t_converter.batch_convert(
-                source_seqs, source_padding_mask, compiled_text_decoder=compiled_text_decoder, s2t_model_list=s2t_model_list
+                source_seqs, source_padding_mask, compiled_text_decoder=compiled_text_decoder, s2t_model_list=s2t_model_list, initial_run=initial_run
             )
         else:
             raise ValueError(f"Unsupported input_modality: {input_modality}")
