@@ -275,17 +275,20 @@ def run_eval(
     print("Warming up 15 Samples")
     if ctx.task == "S2ST" or ctx.task == "S2TT":
         warmup_src = {
-            'is_ragged': True if effective_batch_size>1 else False, 
-            'seqs': torch.rand([effective_batch_size,1144,80], dtype=torch.float16).cuda(), 
+            # 'is_ragged': True if effective_batch_size>1 else False, 
+            'is_ragged': False,
+            'seqs': torch.rand([1,1144,80], dtype=torch.float16).repeat(effective_batch_size, 1, 1).cuda(), 
             'seq_lens': torch.tensor([1054], device='cuda:0').repeat(effective_batch_size, 1).reshape(effective_batch_size)
-            # 'seq_lens': torch.tensor([1054,  874, 1144,  574], device='cuda:0')
         }
     else:
-        warmup_src = {'is_ragged': True if effective_batch_size>1 else False, 
-         'seqs': torch.tensor([[256022, 104990,  17862,    243,    321, 148787,  75155,    251,    411,
-                                1657,  38149,   1567,     70,    321,  56749,  27246,   2980, 119269,
-                                983,   1638,    243,   1497,  18117,      3]], device='cuda:0').repeat(effective_batch_size, 1), 
-        'seq_lens': torch.tensor([24], device='cuda:0').repeat(effective_batch_size, 1).reshape(effective_batch_size)}
+        warmup_src = {
+            # 'is_ragged': True if effective_batch_size>1 else False, 
+            'is_ragged': False,
+            'seqs': torch.tensor([[256022, 104990,  17862,    243,    321, 148787,  75155,    251,    411,
+                                    1657,  38149,   1567,     70,    321,  56749,  27246,   2980, 119269,
+                                    983,   1638,    243,   1497,  18117,      3]], device='cuda:0').repeat(effective_batch_size, 1), 
+            'seq_lens': torch.tensor([24], device='cuda:0').repeat(effective_batch_size, 1).reshape(effective_batch_size)
+        }
     
     for i in range(15):
         text_output, speech_output, runtime = translator.predict(
