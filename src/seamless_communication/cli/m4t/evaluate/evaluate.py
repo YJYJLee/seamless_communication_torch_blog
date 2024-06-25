@@ -295,6 +295,10 @@ def run_eval(
     print("Finished Warming up")
     # Warmup
 
+    effective_batch_size = int(os.environ.get('EFFECTIVE_BATCH_SIZE', -1))
+    if effective_batch_size==-1:
+        assert False
+
 
     model_outputs_tsv = output_path / f"model-outputs-{ctx.data_file.stem}.txt"
     unit_outputs_tsv = output_path / f"unit_output-{ctx.data_file.stem}.txt"
@@ -332,6 +336,10 @@ def run_eval(
                 # HACK:: Fix this bad handling
                 # RuntimeError: The sequence generator returned no hypothesis at index 2. Please file a bug report.
                 try:
+                    src = {'is_ragged': True if effective_batch_size>1 else False, 
+                            'seqs': src['seqs'].repeat(effective_batch_size, 1, 1) if ctx.input_modality == Modality.SPEECH else src['seqs'].repeat(effective_batch_size, 1),
+                            'seq_lens': src['seq_lens'].repeat(effective_batch_size) if ctx.input_modality == Modality.SPEECH else src['seq_lens'].repeat(effective_batch_size, 1).reshape(effective_batch_size)}
+
                     (text_output, speech_output, runtime) = translator.predict(
                         src,
                         ctx.task,
@@ -342,6 +350,7 @@ def run_eval(
                         unit_generation_ngram_filtering=ctx.unit_generation_ngram_filtering,
                     )
                     timer_results.append(runtime)
+                    print(runtime)
                     # if len(timer_results)==0:
                     #     for k, v in runtime.items():
                     #         timer_results[k] = [v]
@@ -366,24 +375,24 @@ def run_eval(
                     speech_output,
                 )
 
-            hyps = [str(s) for s in text_output]
-            refs = [str(s) for s in example[ctx.ref_field]]
+            # hyps = [str(s) for s in text_output]
+            # refs = [str(s) for s in example[ctx.ref_field]]
 
-            for i in range(len(text_output)):
-                if ctx.output_modality == Modality.SPEECH:
-                    assert speech_output is not None
-                    u = speech_output.units[i]
-                    str_units = [str(i) for i in u]
-                    unit_file.write(" ".join(str_units) + "\n")
-                    wav_fp = str(waveforms_dir / f"{sample_id}_pred.wav")
-                    torchaudio.save(
-                        wav_fp,
-                        speech_output.audio_wavs[i][0].to(torch.float32).cpu(),
-                        sample_rate=speech_output.sample_rate,
-                    )
-                    hyp_file.write(f"{refs[i]}\t{hyps[i]}\t{wav_fp}\n")
-                else:
-                    hyp_file.write(f"{refs[i]}\t{hyps[i]}\n")
+            # for i in range(len(text_output)):
+            #     if ctx.output_modality == Modality.SPEECH:
+            #         assert speech_output is not None
+            #         u = speech_output.units[i]
+            #         str_units = [str(i) for i in u]
+            #         unit_file.write(" ".join(str_units) + "\n")
+            #         wav_fp = str(waveforms_dir / f"{sample_id}_pred.wav")
+            #         torchaudio.save(
+            #             wav_fp,
+            #             speech_output.audio_wavs[i][0].to(torch.float32).cpu(),
+            #             sample_rate=speech_output.sample_rate,
+            #         )
+            #         hyp_file.write(f"{refs[i]}\t{hyps[i]}\t{wav_fp}\n")
+            #     else:
+            #         hyp_file.write(f"{refs[i]}\t{hyps[i]}\n")
 
                 sample_id += 1
                 progress_bar.update(1)
@@ -395,8 +404,8 @@ def run_eval(
 
     disable_sdpa = os.environ.get('DISABLE_SDPA', False)
 
-    dump_dir = "/fsx-atom/yejinlee/paper_submission_results/latency_distribution_w_warmup/1gpu_1node/"+ctx.task+"/batch_size_"+str(ctx.batch_size) if not disable_sdpa \
-        else    "/fsx-atom/yejinlee/paper_submission_results/latency_distribution_w_warmup/wo_sdpa/1gpu_1node/"+ctx.task+"/batch_size_"+str(ctx.batch_size)
+    dump_dir = "/fsx-atom/yejinlee/paper_submission_results/latency_distribution_w_warmup/1gpu_1node/batched/"+ctx.task+"/batch_size_"+str(effective_batch_size) if not disable_sdpa \
+        else    "/fsx-atom/yejinlee/paper_submission_results/latency_distribution_w_warmup/wo_sdpa/1gpu_1node/batched/"+ctx.task+"/batch_size_"+str(effective_batch_size)
     os.makedirs(dump_dir, exist_ok=True)
     with open(dump_dir+"/timer_result.txt", "w") as f:
         f.write("\t".join(list(timer_results[0].keys()))+"\n")
