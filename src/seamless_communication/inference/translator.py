@@ -115,7 +115,15 @@ class Translator(nn.Module):
 
         self.model = load_unity_model(model_name_or_card, device=device, dtype=dtype)
         self.model.eval()
+
         assert isinstance(self.model, UnitYModel)
+
+        # import os
+        # quant = os.environ.get('AUTOQUANT', False)
+        # if quant:
+        #     import torchao
+        #     self.model.text_decoder = torchao.autoquant(self.model.text_decoder)
+
 
         if text_tokenizer is None:
             self.text_tokenizer: TextTokenizer = load_unity_text_tokenizer(
@@ -188,6 +196,7 @@ class Translator(nn.Module):
         prosody_encoder_input: Optional[SequenceData] = None,
         compiled_text_decoder: Optional[list] = None,
         s2t_model_list: Optional[list] = None,
+        initial_run = False
     ) -> Tuple[List[StringLike], Optional[Tensor]]:
         # We disregard unit generations opts for the NAR T2U decoder.
         if output_modality != Modality.SPEECH or isinstance(
@@ -204,21 +213,24 @@ class Translator(nn.Module):
             unit_opts=unit_generation_opts,
             s2t_model_list = s2t_model_list
         )
+        if initial_run == True:
+            return None, None, None
+        
         if compiled_text_decoder[0]==None and compiled_text_decoder[1]==None:
             assert len(s2t_model_list)==1
-            
-            compiled_text_decoder[0] = s2t_model_list[0].decoder.forward
-            # compiled_text_decoder[1] = s2t_model_list[0].decoder.forward2
 
-            compile = os.environ.get('TORCH_COMPILE', False)
+            compiled_text_decoder[0] = s2t_model_list[0].decoder.forward2
+            compiled_text_decoder[1] = s2t_model_list[0].decoder.forward
 
-            if not compile:
-                compiled_text_decoder[1] = s2t_model_list[0].decoder.forward2
-            else:
-                print("COMPILE REGISTERED")
-                compiled_text_decoder[1] = torch.compile(s2t_model_list[0].decoder.forward2, mode='max-autotune', fullgraph=True)
+            # compile = os.environ.get('TORCH_COMPILE', False)
 
-        return generator(
+            # if not compile:
+            #     compiled_text_decoder[1] = s2t_model_list[0].decoder.forward2
+            # else:
+            #     print("COMPILE REGISTERED")
+            #     compiled_text_decoder[1] = torch.compile(s2t_model_list[0].decoder.forward2, mode='max-autotune', fullgraph=True)
+
+        output = generator(
             seqs,
             padding_mask,
             input_modality.value,
@@ -229,6 +241,7 @@ class Translator(nn.Module):
             compiled_text_decoder = compiled_text_decoder,
             s2t_model_list = s2t_model_list,
         )
+        return output
 
     @staticmethod
     def get_modalities_from_task_str(task_str: str) -> Tuple[Modality, Modality]:
@@ -262,6 +275,7 @@ class Translator(nn.Module):
         duration_factor: float = 1.0,
         prosody_encoder_input: Optional[SequenceData] = None,
         src_text: Optional[StringLike] = None,
+        initial_run = False
     ) -> Tuple[List[StringLike], Optional[BatchedSpeechOutput]]:
         """
         The main method used to perform inference on all tasks.
@@ -370,6 +384,7 @@ class Translator(nn.Module):
             prosody_encoder_input=prosody_encoder_input,
             compiled_text_decoder = self.compiled_text_decoder,
             s2t_model_list = self.s2t_model_list,
+            initial_run = initial_run
         )
 
         if self.apply_mintox and task_str != Task.ASR.name:
@@ -424,6 +439,8 @@ class Translator(nn.Module):
 
             return texts, None, timer_result
         else:
+            if initial_run:
+                return None, None, None
             assert units is not None
 
             if isinstance(self.model.t2u_model, UnitYT2UModel):

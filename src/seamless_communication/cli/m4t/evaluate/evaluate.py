@@ -273,62 +273,115 @@ def run_eval(
     if effective_batch_size==-1:
         assert False
 
-    # if ctx.task == "S2ST" or ctx.task == "S2TT":
-    #     warmup_src = {
-    #         # 'is_ragged': True if effective_batch_size>1 else False, 
-    #         'is_ragged': False,
-    #         'seqs': torch.rand([1,1144,80], dtype=torch.float16).repeat(effective_batch_size, 1, 1).cuda(), 
-    #         'seq_lens': torch.tensor([1054], device='cuda:0').repeat(effective_batch_size, 1).reshape(effective_batch_size)
-    #     }
-    # else:
-    #     warmup_src = {
-    #         # 'is_ragged': True if effective_batch_size>1 else False, 
-    #         'is_ragged': False,
-    #         'seqs': torch.tensor([[256022, 104990,  17862,    243,    321, 148787,  75155,    251,    411,
-    #                                 1657,  38149,   1567,     70,    321,  56749,  27246,   2980, 119269,
-    #                                 983,   1638,    243,   1497,  18117,      3]], device='cuda:0').repeat(effective_batch_size, 1), 
-    #         'seq_lens': torch.tensor([24], device='cuda:0').repeat(effective_batch_size, 1).reshape(effective_batch_size)
-    #     }
+    if ctx.task == "S2ST" or ctx.task == "S2TT":
+        warmup_src = {
+            # 'is_ragged': True if effective_batch_size>1 else False, 
+            'is_ragged': False,
+            'seqs': torch.rand([1,1144,80], dtype=torch.float16).repeat(effective_batch_size, 1, 1).cuda(), 
+            'seq_lens': torch.tensor([1054], device='cuda:0').repeat(effective_batch_size, 1).reshape(effective_batch_size)
+        }
+    else:
+        warmup_src = {
+            # 'is_ragged': True if effective_batch_size>1 else False, 
+            'is_ragged': False,
+            'seqs': torch.tensor([[256022, 104990,  17862,    243,    321, 148787,  75155,    251,    411,
+                                    1657,  38149,   1567,     70,    321,  56749,  27246,   2980, 119269,
+                                    983,   1638,    243,   1497,  18117,      3]], device='cuda:0').repeat(effective_batch_size, 1), 
+            'seq_lens': torch.tensor([24], device='cuda:0').repeat(effective_batch_size, 1).reshape(effective_batch_size)
+        }
 
-    # print("Initial Run Start")
-    # #  Run once to instantiate the model
-    # text_output, speech_output, runtime = translator.predict(
-    #     warmup_src,
-    #     ctx.task,
-    #     ctx.target_lang,
-    #     src_lang=ctx.source_lang,
-    #     text_generation_opts=ctx.text_generation_opts,
-    #     unit_generation_opts=ctx.unit_generation_opts,
-    #     unit_generation_ngram_filtering=ctx.unit_generation_ngram_filtering,
-    #     initial_run=True
-    # )
-    # print("Initial Run End")
+    print("Initial Run Start")
+    #  Run once to instantiate the model
+    text_output, speech_output, runtime = translator.predict(
+        warmup_src,
+        ctx.task,
+        ctx.target_lang,
+        src_lang=ctx.source_lang,
+        text_generation_opts=ctx.text_generation_opts,
+        unit_generation_opts=ctx.unit_generation_opts,
+        unit_generation_ngram_filtering=ctx.unit_generation_ngram_filtering,
+        initial_run=True
+    )
+    print("Initial Run End")
+
 
     # quant = os.environ.get('AUTOQUANT', False)
     # if quant:
-    #     translator.s2t_model_list[0] = torchao.autoquant(translator.s2t_model_list[0])
-
-    #     print("Autoquant shape calibration start") 
-    #     translator.predict(
-    #         warmup_src,
-    #         ctx.task,
-    #         ctx.target_lang,
-    #         src_lang=ctx.source_lang,
-    #         text_generation_opts=ctx.text_generation_opts,
-    #         unit_generation_opts=ctx.unit_generation_opts,
-    #         unit_generation_ngram_filtering=ctx.unit_generation_ngram_filtering,
-    #     )
-
-
     #     print("Autoquant benchmarking Start") 
-    #     # do autoquantization
-    #     translator.s2t_model_list[0].do_autoquant()
+    #     translator.model.text_decoder.do_autoquant()
 
     # compile = os.environ.get('TORCH_COMPILE', False)
     # if compile:
     #     print("COMPILE REGISTERED")
-    #     translator.compiled_text_decoder[1] = torch.compile(translator.s2t_model_list[0].decoder.forward2, mode='max-autotune', fullgraph=True)
+    #     translator.compiled_text_decoder[1] = torch.compile(translator.model.text_decoder.forward2, mode='max-autotune', fullgraph=True)
 
+
+    torch._inductor.config.coordinate_descent_tuning = True
+    torch._inductor.config.force_fuse_int_mm_with_mul = True
+    quant = os.environ.get('AUTOQUANT', False)
+    if quant:
+        from fairseq2.nn.projection import Linear
+
+        def layers_to_quantize(layer, x):
+            if isinstance(layer, Linear):
+                return True
+            return False
+        
+        # translator.s2t_model_list[0].encoder = torchao.autoquant(translator.s2t_model_list[0].encoder, manual=True, filter_fn=layers_to_quantize, mode=["interpolate", .2])
+        translator.s2t_model_list[0].decoder = torchao.autoquant(translator.s2t_model_list[0].decoder, manual=True, filter_fn=layers_to_quantize, mode=["interpolate", .2])
+        # print(translator.s2t_model_list[0].decoder.do_autoquant)
+        # translator.compiled_text_decoder[0] = translator.s2t_model_list[0].decoder.forward
+        # translator.compiled_text_decoder[1] = translator.s2t_model_list[0].decoder.forward2
+
+        print("Autoquant shape calibration start") 
+        translator.predict(
+            warmup_src,
+            ctx.task,
+            ctx.target_lang,
+            src_lang=ctx.source_lang,
+            text_generation_opts=ctx.text_generation_opts,
+            unit_generation_opts=ctx.unit_generation_opts,
+            unit_generation_ngram_filtering=ctx.unit_generation_ngram_filtering,
+
+        )
+        # print(translator.s2t_model_list[0].decoder.do_autoquant)
+
+        print("Autoquant benchmarking Start") 
+        # # do autoquantization
+        # translator.s2t_model_list[0].encoder.do_autoquant()
+        translator.s2t_model_list[0].decoder.do_autoquant()
+
+
+
+        # # translator.model = torchao.autoquant(translator.model)
+        # # translator.compiled_text_decoder[0] = translator.model.text_decoder.forward
+        # # translator.compiled_text_decoder[1] = translator.model.text_decoder.forward2
+
+        # print("Autoquant shape calibration start") 
+        # translator.predict(
+        #     warmup_src,
+        #     ctx.task,
+        #     ctx.target_lang,
+        #     src_lang=ctx.source_lang,
+        #     text_generation_opts=ctx.text_generation_opts,
+        #     unit_generation_opts=ctx.unit_generation_opts,
+        #     unit_generation_ngram_filtering=ctx.unit_generation_ngram_filtering,
+        # )
+
+        # print("Autoquant benchmarking Start") 
+        # # do autoquantization
+        # translator.model.do_autoquant()
+
+
+
+    compile = os.environ.get('TORCH_COMPILE', False)
+    if compile:
+        print("COMPILE REGISTERED")
+        # translator.compiled_text_decoder[0] = translator.s2t_model_list[0].decoder.forward
+        # translator.compiled_text_decoder[1] = torch.compile(translator.s2t_model_list[0].decoder.forward2, mode='max-autotune', fullgraph=True)
+
+        translator.compiled_text_decoder[0] = translator.s2t_model_list[0].decoder.forward2
+        translator.compiled_text_decoder[1] = torch.compile(translator.s2t_model_list[0].decoder.forward, mode='max-autotune', fullgraph=True)
 
 
     model_outputs_tsv = output_path / f"model-outputs-{ctx.data_file.stem}.txt"
@@ -370,7 +423,10 @@ def run_eval(
                     src = {'is_ragged': True if effective_batch_size>1 else False, 
                             'seqs': src['seqs'].repeat(effective_batch_size, 1, 1) if ctx.input_modality == Modality.SPEECH else src['seqs'].repeat(effective_batch_size, 1),
                             'seq_lens': src['seq_lens'].repeat(effective_batch_size) if ctx.input_modality == Modality.SPEECH else src['seq_lens'].repeat(effective_batch_size, 1).reshape(effective_batch_size)}
-
+                    # if iter_id == 5:
+                    #     import torch.profiler as profiler
+                    #     prof = torch.profiler.profile(with_stack=True, with_flops=False, profile_memory=False)
+                    #     prof.start()
                     (text_output, speech_output, runtime) = translator.predict(
                         src,
                         ctx.task,
@@ -382,7 +438,11 @@ def run_eval(
                     )
                     timer_results.append(runtime)
                     print(runtime)
-                    print(text_output)
+                    # print(text_output)
+                    # if iter_id == 5:
+                    #     prof.stop()
+                    #     prof.export_chrome_trace("compile_debug.json")
+
                     # if len(timer_results)==0:
                     #     for k, v in runtime.items():
                     #         timer_results[k] = [v]

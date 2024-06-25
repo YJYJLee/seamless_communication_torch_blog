@@ -164,7 +164,7 @@ class UnitYGenerator:
             self.s2t_converter = SequenceToTextConverter(
                 generator, text_tokenizer, "translation", target_lang
             )
-
+        
         if model.text_encoder is None:
             self.t2t_generator = None
         else:
@@ -234,7 +234,6 @@ class UnitYGenerator:
                     unk_penalty=unit_opts.unk_penalty,
                     len_penalty=unit_opts.len_penalty,
                 )
-
     @torch.inference_mode()
     def __call__(
         self,
@@ -284,7 +283,6 @@ class UnitYGenerator:
         else:
             raise ValueError(f"Unsupported input_modality: {input_modality}")
 
-        
         # We skip T2U when we only need to output text.
         if output_modality == "text":
             return texts, None, timer_result
@@ -307,6 +305,7 @@ class UnitYGenerator:
         start_time = time.time()
         # Use the output of the text generator to compute the decoder output.
         decoder_output, decoder_padding_mask = self.model.decode(
+        # decoder_output, decoder_padding_mask = s2t_model_list[0].decode(
             text_seqs,
             text_padding_mask,
             text_gen_output.encoder_output,
