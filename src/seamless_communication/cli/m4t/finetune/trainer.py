@@ -106,14 +106,14 @@ class UnitYFinetuneWrapper(nn.Module):
             seqs = batch.speech_to_text.src_tokens.to(self.device)
             assert batch.speech_to_text.src_lengths is not None
             seq_lens = batch.speech_to_text.src_lengths.to(self.device)
-            speech_encoder_out, speech_encoder_padding_mask = self.model.encode_speech(
+            speech_encoder_out, speech_encoder_padding_mask, gpu_util = self.model.encode_speech(
                 seqs=seqs, padding_mask=PaddingMask(seq_lens, seqs.size(1))
             )
             assert batch.speech_to_text.prev_output_tokens is not None
             seqs = batch.speech_to_text.prev_output_tokens.to(self.device)
             assert batch.speech_to_text.target_lengths is not None
             seq_lens = batch.speech_to_text.target_lengths.to(self.device)
-            text_decoder_out, text_decoder_padding_mask = self.model.decode(
+            text_decoder_out, text_decoder_padding_mask, gpu_util = self.model.decode(
                 seqs=seqs,
                 padding_mask=PaddingMask(seq_lens, seqs.size(1)),
                 encoder_output=speech_encoder_out,
