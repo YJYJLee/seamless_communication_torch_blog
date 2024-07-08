@@ -112,6 +112,12 @@ def init_parser() -> argparse.ArgumentParser:
         help=("Maximum number of src_tokens per batch, used to avoid GPU OOM and maximize the effective batch size"),
     )
     parser.add_argument(
+        "--decoder_layer_drop_p",
+        type=float,
+        default=0.0,
+        help=("Maximum layer dropout rate in the decoder"),
+    )
+    parser.add_argument(
         "--mode",
         type=trainer.FinetuneMode,
         choices=list(trainer.FinetuneMode),
@@ -177,7 +183,11 @@ def main() -> None:
     
     if model.text_encoder is not None:
         model.text_encoder = None
-    
+
+    # Update layer dropout
+    if args.decoder_layer_drop_p > 0:
+        model.text_decoder.drop_p = [args.decoder_layer_drop_p] * len(model.text_decoder.layers)
+
     # Put model on selected device
     model = model.to(finetune_params.device)
 
