@@ -200,7 +200,7 @@ def main() -> None:
 
     # Update layer dropout
     if args.decoder_layer_drop_p > 0:
-        model.text_decoder.drop_p = get_values(scale_type=args.decoder_layer_drop_scale, scale_period=len(model.text_decoder.layers), max_val=args.decoder_layer_drop_p, slice_str=args.decoder_layer_drop_slice)
+        model.text_decoder.layers.drop_p = get_values(scale_type=args.decoder_layer_drop_scale, scale_period=len(model.text_decoder.layers), max_val=args.decoder_layer_drop_p, slice_str=args.decoder_layer_drop_slice)
 
     # Put model on selected device
     model = model.to(finetune_params.device)
