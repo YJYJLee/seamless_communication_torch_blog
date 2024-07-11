@@ -12,6 +12,7 @@ from pathlib import Path
 import torch
 
 from fairseq2.utils.scales import ScaleType, get_values
+from fairseq2.utils.early_exit_loss import hook
 
 from seamless_communication.cli.m4t.finetune import dataloader, dist_utils, trainer
 from seamless_communication.models.unity import (
@@ -201,6 +202,9 @@ def main() -> None:
     # Update layer dropout
     if args.decoder_layer_drop_p > 0:
         model.text_decoder.layers.drop_p = get_values(scale_type=args.decoder_layer_drop_scale, scale_period=len(model.text_decoder.layers), max_val=args.decoder_layer_drop_p, slice_str=args.decoder_layer_drop_slice)
+
+    # Set early exit hook
+    model.text_decoder.register_layer_output_hook(hook)
 
     # Put model on selected device
     model = model.to(finetune_params.device)
