@@ -482,17 +482,17 @@ def load_checkpoint(model: UnitYModel, path: str, device = torch.device("cpu")) 
     def _select_keys(state_dict: Dict[str, Any], prefix: str) -> Dict[str, Any]:
         return {key.replace(prefix, ""): value for key, value in state_dict.items() if key.startswith(prefix)}
 
-    model.speech_encoder_frontend.load_state_dict(_select_keys(saved_model, "model.speech_encoder_frontend."))
-    model.speech_encoder.load_state_dict(_select_keys(saved_model, "model.speech_encoder."))
+    model.speech_encoder_frontend.load_state_dict(_select_keys(saved_model, "module.speech_encoder_frontend."))
+    model.speech_encoder.load_state_dict(_select_keys(saved_model, "module.speech_encoder."))
 
     assert model.text_decoder_frontend is not None
-    model.text_decoder_frontend.load_state_dict(_select_keys(saved_model, "model.text_decoder_frontend."))
+    model.text_decoder_frontend.load_state_dict(_select_keys(saved_model, "module.text_decoder_frontend."))
 
     assert model.text_decoder is not None
-    model.text_decoder.load_state_dict(_select_keys(saved_model, "model.text_decoder."))
+    model.text_decoder.load_state_dict(_select_keys(saved_model, "module.text_decoder."))
 
     assert model.final_proj is not None
-    model.final_proj.load_state_dict(_select_keys(saved_model, "model.final_proj."))
+    model.final_proj.load_state_dict(_select_keys(saved_model, "module.final_proj."))
 
 
 def main(optional_args: Optional[Dict[str, Any]] = None) -> None:
