@@ -98,6 +98,14 @@ def add_inference_arguments(parser: argparse.ArgumentParser) -> argparse.Argumen
         help="Size of ngram repeat block for both text & unit decoding.",
         default=4,
     )
+    parser.add_argument(
+        "--text_generation_early_exit",
+        type=int,
+        help=(
+            "Layer to exit at for text generation."
+        ),
+        default=None,
+    )
     # Unit generation args.
     parser.add_argument(
         "--unit_generation_beam_size",

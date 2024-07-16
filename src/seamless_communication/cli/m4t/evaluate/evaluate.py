@@ -586,6 +586,7 @@ def main(optional_args: Optional[Dict[str, Any]] = None) -> None:
         dtype=dtype,
         input_modality=input_modality,
         output_modality=output_modality,
+        text_generation_early_exit=args.text_generation_early_exit,
     )
     
     if args.load_checkpoint:
