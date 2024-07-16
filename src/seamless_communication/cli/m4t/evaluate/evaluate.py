@@ -422,6 +422,7 @@ def run_eval(
         print(k, " Avg Decoding Step: ", np.average(v[2]))
     disable_sdpa = os.environ.get('DISABLE_SDPA', False)
 
+    """
     dump_dir = "/fsx-atom/yejinlee/paper_submission_results/radar_chart/1gpu_1node/"+ctx.task+"/batch_size_"+str(ctx.batch_size) if not disable_sdpa \
         else    "/fsx-atom/yejinlee/paper_submission_results/radar_chart/wo_sdpa/1gpu_1node/"+ctx.task+"/batch_size_"+str(ctx.batch_size)
     
@@ -458,8 +459,8 @@ def run_eval(
     with open(dump_dir+"/gpu_util.txt", "w") as f:
         f.write("\n".join([str(g) for g in gpu_utils]))
         print("Written to : ", dump_dir+"/gpu_util.txt")
-        
-    exit(0)
+    """
+    # exit(0)
 
     progress_bar.close()
     logger.info(f"Processed {sample_id} samples")
