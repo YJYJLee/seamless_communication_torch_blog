@@ -66,6 +66,13 @@ def add_inference_arguments(parser: argparse.ArgumentParser) -> argparse.Argumen
     )
     # Text generation args.
     parser.add_argument(
+        "--text_generation_method",
+        type=str,
+        choices=["autoregressive", "beam_search", "self_speculative", "speculative"],
+        help="Method for text decoding.",
+        default="beam_search",
+    )
+    parser.add_argument(
         "--text_generation_beam_size",
         type=int,
         help="Beam size for incremental text decoding.",
@@ -107,6 +114,13 @@ def add_inference_arguments(parser: argparse.ArgumentParser) -> argparse.Argumen
         default=None,
     )
     # Unit generation args.
+    parser.add_argument(
+        "--unit_generation_method",
+        type=str,
+        choices=["autoregressive", "beam_search", "self_speculative", "speculative"],
+        help="Beam size for incremental unit decoding.",
+        default="beam_search",
+    )
     parser.add_argument(
         "--unit_generation_beam_size",
         type=int,
@@ -169,6 +183,7 @@ def set_generation_opts(
 ) -> Tuple[SequenceGeneratorOptions, SequenceGeneratorOptions]:
     # Set text, unit generation opts.
     text_generation_opts = SequenceGeneratorOptions(
+        method=args.text_generation_method,
         beam_size=args.text_generation_beam_size,
         soft_max_seq_len=(
             args.text_generation_max_len_a,
@@ -183,6 +198,7 @@ def set_generation_opts(
         )
 
     unit_generation_opts = SequenceGeneratorOptions(
+        method=args.unit_generation_method,
         beam_size=args.unit_generation_beam_size,
         soft_max_seq_len=(
             args.unit_generation_max_len_a,

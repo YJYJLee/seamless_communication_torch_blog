@@ -12,6 +12,7 @@ from fairseq2.data import SequenceData, StringLike
 from fairseq2.data.text import TextTokenizer
 from fairseq2.generation import (
     BeamSearchSeq2SeqGenerator,
+    SamplingSeq2SeqGenerator,
     Seq2SeqGenerator,
     SequenceToTextConverter,
     StepProcessor,
@@ -61,6 +62,8 @@ def remove_consecutive_repeated_ngrams(
 @dataclass
 class SequenceGeneratorOptions:
     """Holds the options to pass to a sequence generator."""
+
+    method: str = "beam_search"
 
     beam_size: int = 5
     """The beam size."""
@@ -146,16 +149,29 @@ class UnitYGenerator:
         if text_opts.step_processor is not None:
             step_processors.append(text_opts.step_processor)
 
-        generator = BeamSearchSeq2SeqGenerator(
-            s2t_model,
-            beam_size=text_opts.beam_size,
-            max_gen_len=text_opts.soft_max_seq_len,
-            max_seq_len=text_opts.hard_max_seq_len,
-            echo_prompt=True,
-            step_processors=step_processors,
-            unk_penalty=text_opts.unk_penalty,
-            len_penalty=text_opts.len_penalty,
-        )
+        if text_opts.method == "beam_search":
+            generator = BeamSearchSeq2SeqGenerator(
+                s2t_model,
+                beam_size=text_opts.beam_size,
+                max_gen_len=text_opts.soft_max_seq_len,
+                max_seq_len=text_opts.hard_max_seq_len,
+                echo_prompt=True,
+                step_processors=step_processors,
+                unk_penalty=text_opts.unk_penalty,
+                len_penalty=text_opts.len_penalty,
+            )
+        elif text_opts.method == "autoregressive":
+            generator = SamplingSeq2SeqGenerator(
+                s2t_model,
+                max_gen_len=text_opts.soft_max_seq_len,
+                max_seq_len=text_opts.hard_max_seq_len,
+                echo_prompt=True,
+                step_processors=step_processors,
+                unk_penalty=text_opts.unk_penalty,
+                len_penalty=text_opts.len_penalty,
+            )
+        else:
+            raise ValueError(f"Unsupported generation method {unit_opts.method}.")
         self.s2t_converter = SequenceToTextConverter(
             generator, text_tokenizer, "translation", target_lang
         )
@@ -173,16 +189,29 @@ class UnitYGenerator:
                 final_proj=model.final_proj,
                 target_vocab_info=model.target_vocab_info,
             )
-            generator = BeamSearchSeq2SeqGenerator(
-                t2t_model,
-                beam_size=text_opts.beam_size,
-                max_gen_len=text_opts.soft_max_seq_len,
-                max_seq_len=text_opts.hard_max_seq_len,
-                echo_prompt=True,
-                step_processors=step_processors,
-                unk_penalty=text_opts.unk_penalty,
-                len_penalty=text_opts.len_penalty,
-            )
+            if text_opts.method == "beam_search":
+                generator = BeamSearchSeq2SeqGenerator(
+                    t2t_model,
+                    beam_size=text_opts.beam_size,
+                    max_gen_len=text_opts.soft_max_seq_len,
+                    max_seq_len=text_opts.hard_max_seq_len,
+                    echo_prompt=True,
+                    step_processors=step_processors,
+                    unk_penalty=text_opts.unk_penalty,
+                    len_penalty=text_opts.len_penalty,
+                )
+            elif text_opts.method == "autoregressive":
+                generator = SamplingSeq2SeqGenerator(
+                    t2t_model,
+                    max_gen_len=text_opts.soft_max_seq_len,
+                    max_seq_len=text_opts.hard_max_seq_len,
+                    echo_prompt=True,
+                    step_processors=step_processors,
+                    unk_penalty=text_opts.unk_penalty,
+                    len_penalty=text_opts.len_penalty,
+                )
+            else:
+                raise ValueError(f"Unsupported generation method {unit_opts.method}.")
             self.t2t_converter = SequenceToTextConverter(
                 generator, text_tokenizer, "translation", target_lang
             )
@@ -215,16 +244,29 @@ class UnitYGenerator:
                 if unit_opts.step_processor is not None:
                     step_processors.append(unit_opts.step_processor)
 
-                self.unit_generator = BeamSearchSeq2SeqGenerator(
-                    self.model.t2u_model,
-                    beam_size=unit_opts.beam_size,
-                    max_gen_len=unit_opts.soft_max_seq_len,
-                    max_seq_len=unit_opts.hard_max_seq_len,
-                    echo_prompt=True,
-                    step_processors=step_processors,
-                    unk_penalty=unit_opts.unk_penalty,
-                    len_penalty=unit_opts.len_penalty,
-                )
+                if unit_opts.method == "beam_search":
+                    self.unit_generator = BeamSearchSeq2SeqGenerator(
+                        self.model.t2u_model,
+                        beam_size=unit_opts.beam_size,
+                        max_gen_len=unit_opts.soft_max_seq_len,
+                        max_seq_len=unit_opts.hard_max_seq_len,
+                        echo_prompt=True,
+                        step_processors=step_processors,
+                        unk_penalty=unit_opts.unk_penalty,
+                        len_penalty=unit_opts.len_penalty,
+                    )
+                elif unit_opts.method == "autoregressive":
+                    self.unit_generator = SamplingSeq2SeqGenerator(
+                        self.model.t2u_model,
+                        max_gen_len=unit_opts.soft_max_seq_len,
+                        max_seq_len=unit_opts.hard_max_seq_len,
+                        echo_prompt=True,
+                        step_processors=step_processors,
+                        unk_penalty=unit_opts.unk_penalty,
+                        len_penalty=unit_opts.len_penalty,
+                    )
+                else:
+                    raise ValueError(f"Unsupported generation method {unit_opts.method}.")
 
     @torch.inference_mode()
     def __call__(
