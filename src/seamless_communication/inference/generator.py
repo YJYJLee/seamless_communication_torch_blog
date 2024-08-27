@@ -16,6 +16,7 @@ from fairseq2.generation import (
     Seq2SeqGenerator,
     SequenceToTextConverter,
     StepProcessor,
+    TopKSampler,
 )
 from fairseq2.nn.padding import (
     PaddingMask,
@@ -64,6 +65,10 @@ class SequenceGeneratorOptions:
     """Holds the options to pass to a sequence generator."""
 
     method: str = "beam_search"
+    """Decoding method."""
+
+    top_k: int = 1
+    """Top_k sampling for autoregressive decoding."""
 
     beam_size: int = 5
     """The beam size."""
@@ -163,6 +168,7 @@ class UnitYGenerator:
         elif text_opts.method == "autoregressive":
             generator = SamplingSeq2SeqGenerator(
                 s2t_model,
+                sampler=TopKSampler(k=text_opts.top_k),
                 max_gen_len=text_opts.soft_max_seq_len,
                 max_seq_len=text_opts.hard_max_seq_len,
                 echo_prompt=True,
@@ -203,6 +209,7 @@ class UnitYGenerator:
             elif text_opts.method == "autoregressive":
                 generator = SamplingSeq2SeqGenerator(
                     t2t_model,
+                    sampler=TopKSampler(k=text_opts.top_k),
                     max_gen_len=text_opts.soft_max_seq_len,
                     max_seq_len=text_opts.hard_max_seq_len,
                     echo_prompt=True,
@@ -258,6 +265,7 @@ class UnitYGenerator:
                 elif unit_opts.method == "autoregressive":
                     self.unit_generator = SamplingSeq2SeqGenerator(
                         self.model.t2u_model,
+                        sampler=TopKSampler(k=text_opts.top_k),
                         max_gen_len=unit_opts.soft_max_seq_len,
                         max_seq_len=unit_opts.hard_max_seq_len,
                         echo_prompt=True,
