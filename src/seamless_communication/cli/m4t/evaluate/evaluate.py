@@ -586,11 +586,16 @@ def main(optional_args: Optional[Dict[str, Any]] = None) -> None:
         dtype=dtype,
         input_modality=input_modality,
         output_modality=output_modality,
-        text_generation_early_exit=args.text_generation_early_exit,
+        # text_generation_early_exit=args.text_generation_early_exit,
     )
     
     if args.load_checkpoint:
         load_checkpoint(translator.model, path=args.load_checkpoint, device=device)
+
+    # Apply early exit layer manually
+    if args.text_generation_early_exit:
+        del translator.model.text_decoder.layers[args.text_generation_early_exit:]
+        translator.model.text_decoder.layers = translator.model.text_decoder.layers[:args.text_generation_early_exit]
 
     text_generation_opts, unit_generation_opts = set_generation_opts(args)
 

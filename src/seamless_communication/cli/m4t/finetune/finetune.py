@@ -203,7 +203,7 @@ def main() -> None:
     if args.decoder_layer_drop_p > 0:
         model.text_decoder.layers.drop_p = get_values(scale_type=args.decoder_layer_drop_scale, scale_period=len(model.text_decoder.layers), max_val=args.decoder_layer_drop_p, slice_str=args.decoder_layer_drop_slice)
 
-    # Set early exit hook
+    # Set early exit loss hook
     model.text_decoder.register_layer_output_hook(hook)
 
     # Put model on selected device
