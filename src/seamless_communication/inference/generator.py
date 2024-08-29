@@ -4,6 +4,7 @@
 # This source code is licensed under the license found in the
 # MIT_LICENSE file in the root directory of this source tree.
 
+from copy import deepcopy
 from dataclasses import dataclass
 from typing import List, Optional, Tuple
 
@@ -13,6 +14,7 @@ from fairseq2.data.text import TextTokenizer
 from fairseq2.generation import (
     BeamSearchSeq2SeqGenerator,
     SamplingSeq2SeqGenerator,
+    SpeculativeSamplingSeq2SeqGenerator,
     Seq2SeqGenerator,
     SequenceToTextConverter,
     StepProcessor,
@@ -93,6 +95,12 @@ class SequenceGeneratorOptions:
     """The length penalty, where values less than 1.0 favor shorter
     sequences; values greater than 1.0 favor longer sequences."""
 
+    compute_scores: bool = False
+    """Whether to compute scores of each hypothesis or not."""
+
+    draft_early_exit: int = None
+    """If method is 'self_speculate' this determines which layer to exit at."""
+
 
 class UnitYGenerator:
     """Generates text translations and speech units from a UnitY model."""
@@ -164,6 +172,7 @@ class UnitYGenerator:
                 step_processors=step_processors,
                 unk_penalty=text_opts.unk_penalty,
                 len_penalty=text_opts.len_penalty,
+                compute_scores=text_opts.compute_scores,
             )
         elif text_opts.method == "autoregressive":
             generator = SamplingSeq2SeqGenerator(
@@ -175,6 +184,26 @@ class UnitYGenerator:
                 step_processors=step_processors,
                 unk_penalty=text_opts.unk_penalty,
                 len_penalty=text_opts.len_penalty,
+                compute_scores=text_opts.compute_scores,
+            )
+        elif text_opts.method == "self_speculative":
+            # TODO: avoid cloning model weights, using memo Dict arg and Python's id() function to fill it
+            s2t_decoder_draft = deepcopy(s2t_model.decoder)
+            assert text_opts.draft_early_exit is not None, "for self_speculative, draft_early_exit needs to be defined"
+            del s2t_decoder_draft.layers[text_opts.draft_early_exit:]
+            s2t_decoder_draft.layers = s2t_decoder_draft.layers[:text_opts.draft_early_exit]
+
+            generator = SpeculativeSamplingSeq2SeqGenerator(
+                s2t_model,
+                s2t_decoder_draft,
+                sampler=TopKSampler(k=text_opts.top_k),
+                max_gen_len=text_opts.soft_max_seq_len,
+                max_seq_len=text_opts.hard_max_seq_len,
+                echo_prompt=True,
+                step_processors=step_processors,
+                unk_penalty=text_opts.unk_penalty,
+                len_penalty=text_opts.len_penalty,
+                compute_scores=text_opts.compute_scores,
             )
         else:
             raise ValueError(f"Unsupported generation method {unit_opts.method}.")
@@ -205,6 +234,7 @@ class UnitYGenerator:
                     step_processors=step_processors,
                     unk_penalty=text_opts.unk_penalty,
                     len_penalty=text_opts.len_penalty,
+                    compute_scores=text_opts.compute_scores,
                 )
             elif text_opts.method == "autoregressive":
                 generator = SamplingSeq2SeqGenerator(
@@ -216,6 +246,7 @@ class UnitYGenerator:
                     step_processors=step_processors,
                     unk_penalty=text_opts.unk_penalty,
                     len_penalty=text_opts.len_penalty,
+                    compute_scores=text_opts.compute_scores,
                 )
             else:
                 raise ValueError(f"Unsupported generation method {unit_opts.method}.")
@@ -261,6 +292,7 @@ class UnitYGenerator:
                         step_processors=step_processors,
                         unk_penalty=unit_opts.unk_penalty,
                         len_penalty=unit_opts.len_penalty,
+                        compute_scores=text_opts.compute_scores,
                     )
                 elif unit_opts.method == "autoregressive":
                     self.unit_generator = SamplingSeq2SeqGenerator(
@@ -272,6 +304,7 @@ class UnitYGenerator:
                         step_processors=step_processors,
                         unk_penalty=unit_opts.unk_penalty,
                         len_penalty=unit_opts.len_penalty,
+                        compute_scores=text_opts.compute_scores,
                     )
                 else:
                     raise ValueError(f"Unsupported generation method {unit_opts.method}.")

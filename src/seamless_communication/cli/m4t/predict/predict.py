@@ -100,6 +100,20 @@ def add_inference_arguments(parser: argparse.ArgumentParser) -> argparse.Argumen
         default=False,
     )
     parser.add_argument(
+        "--text_generation_compute_scores",
+        type=bool,
+        help=(
+            "Compute scores of hypothesese during text generation."
+        ),
+        default=False,
+    )
+    parser.add_argument(
+        "--text_generation_draft_early_exit",
+        type=int,
+        help="If text_generation_method is 'self_speculative' determines which layer to exit at during the draft stage.",
+        default=None,
+    )
+    parser.add_argument(
         "--no_repeat_ngram_size",
         type=int,
         help="Size of ngram repeat block for both text & unit decoding.",
@@ -158,6 +172,14 @@ def add_inference_arguments(parser: argparse.ArgumentParser) -> argparse.Argumen
         default=False,
     )
     parser.add_argument(
+        "--unit_generation_compute_scores",
+        type=bool,
+        help=(
+            "Compute scores of hypothesese during unit generation."
+        ),
+        default=False,
+    )
+    parser.add_argument(
         "--unit_generation_ngram_filtering",
         type=bool,
         help=(
@@ -165,6 +187,12 @@ def add_inference_arguments(parser: argparse.ArgumentParser) -> argparse.Argumen
             "from the decoded unit output."
         ),
         default=False,
+    )
+    parser.add_argument(
+        "--unit_generation_draft_early_exit",
+        type=int,
+        help="If unit_generation_method is 'self_speculative' determines which layer to exit at during the draft stage.",
+        default=None,
     )
     parser.add_argument(
         "--text_unk_blocking",
@@ -189,6 +217,8 @@ def set_generation_opts(
             args.text_generation_max_len_a,
             args.text_generation_max_len_b,
         ),
+        compute_scores=args.text_generation_compute_scores,
+        draft_early_exit=args.text_generation_draft_early_exit,
     )
     if args.text_unk_blocking:
         text_generation_opts.unk_penalty = torch.inf
@@ -204,6 +234,8 @@ def set_generation_opts(
             args.unit_generation_max_len_a,
             args.unit_generation_max_len_b,
         ),
+        compute_scores=args.unit_generation_compute_scores,
+        draft_early_exit=args.unit_generation_draft_early_exit
     )
     if args.unit_generation_ngram_blocking:
         unit_generation_opts.step_processor = NGramRepeatBlockProcessor(
