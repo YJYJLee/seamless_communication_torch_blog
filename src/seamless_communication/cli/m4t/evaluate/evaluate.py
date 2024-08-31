@@ -422,13 +422,9 @@ def run_eval(
         print(k, " Avg Decoding Step: ", np.average(v[2]))
     disable_sdpa = os.environ.get('DISABLE_SDPA', False)
 
-    """
-    dump_dir = "/fsx-atom/yejinlee/paper_submission_results/radar_chart/1gpu_1node/"+ctx.task+"/batch_size_"+str(ctx.batch_size) if not disable_sdpa \
-        else    "/fsx-atom/yejinlee/paper_submission_results/radar_chart/wo_sdpa/1gpu_1node/"+ctx.task+"/batch_size_"+str(ctx.batch_size)
-    
-    os.makedirs(dump_dir, exist_ok=True)
+    seq_lengths_output = output_path / f"seq_lengths.txt"
     header = list()
-    with open(dump_dir+"/seq_lengths.txt", "w") as f:
+    with open(seq_lengths_output, "w") as f:
         for k in seq_lengths.keys():
             header += [k]*3
         f.write("\t".join(header)+"\n")
@@ -440,27 +436,27 @@ def run_eval(
             write_str += "\n"
 
         f.write(write_str)
-        print("Written to : ", dump_dir+"/seq_lengths.txt")
-        
-        
-    with open(dump_dir+"/timer_result.txt", "w") as f:
+        print("Written to : ", seq_lengths_output)
+
+    timer_results_output = output_path / f"timer_result.txt"
+    with open(timer_results_output, "w") as f:
         write_str = "\t".join(list(timer_results[0].keys()))+"\n"
         # f.write("\t".join(list(timer_results[0].keys()))+"\n")
         # f.write("\t".join([str(np.average(v)) for k, v in timer_results.items()]))
         for t in timer_results:
             write_str += "\t".join([str(tt) for tt in t.values()]) + "\n"
         f.write(write_str)
-    print("Written to : ", dump_dir+"/timer_result.txt")
+    print("Written to : ", timer_results_output)
 
-    with open(dump_dir+"/memory_alloc.txt", "w") as f:
+    memory_alloc_output = output_path / f"memory_alloc.txt"
+    with open(memory_alloc_output, "w") as f:
         f.write("\n".join([str(g) for g in memory_capas]))
-        print("Written to : ", dump_dir+"/memory_alloc.txt")
+        print("Written to : ", memory_alloc_output)
 
-    with open(dump_dir+"/gpu_util.txt", "w") as f:
+    gpu_util_output = output_path / f"gpu_util.txt"
+    with open(gpu_util_output, "w") as f:
         f.write("\n".join([str(g) for g in gpu_utils]))
-        print("Written to : ", dump_dir+"/gpu_util.txt")
-    """
-    # exit(0)
+        print("Written to : ", gpu_util_output)
 
     progress_bar.close()
     logger.info(f"Processed {sample_id} samples")
