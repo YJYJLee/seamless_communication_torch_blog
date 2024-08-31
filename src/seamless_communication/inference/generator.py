@@ -99,7 +99,10 @@ class SequenceGeneratorOptions:
     """Whether to compute scores of each hypothesis or not."""
 
     draft_early_exit: int = None
-    """If method is 'self_speculate' this determines which layer to exit at."""
+    """If method is 'self_speculative' this determines which layer to exit at."""
+
+    k_speculate: int = None
+    """If method is 'speculative' or 'self_speculative' this determines how many draft tokens we generate."""
 
 
 class UnitYGenerator:
@@ -188,14 +191,15 @@ class UnitYGenerator:
             )
         elif text_opts.method == "self_speculative":
             # TODO: avoid cloning model weights, using memo Dict arg and Python's id() function to fill it
-            s2t_decoder_draft = deepcopy(s2t_model.decoder)
+            s2t_model_draft = deepcopy(s2t_model)
             assert text_opts.draft_early_exit is not None, "for self_speculative, draft_early_exit needs to be defined"
-            del s2t_decoder_draft.layers[text_opts.draft_early_exit:]
-            s2t_decoder_draft.layers = s2t_decoder_draft.layers[:text_opts.draft_early_exit]
+            del s2t_model_draft.decoder.layers[text_opts.draft_early_exit:]
+            s2t_model_draft.decoder.layers = s2t_model_draft.decoder.layers[:text_opts.draft_early_exit]
 
             generator = SpeculativeSamplingSeq2SeqGenerator(
                 s2t_model,
-                s2t_decoder_draft,
+                s2t_model_draft,
+                text_opts.k_speculate,
                 sampler=TopKSampler(k=text_opts.top_k),
                 max_gen_len=text_opts.soft_max_seq_len,
                 max_seq_len=text_opts.hard_max_seq_len,
@@ -239,6 +243,26 @@ class UnitYGenerator:
             elif text_opts.method == "autoregressive":
                 generator = SamplingSeq2SeqGenerator(
                     t2t_model,
+                    sampler=TopKSampler(k=text_opts.top_k),
+                    max_gen_len=text_opts.soft_max_seq_len,
+                    max_seq_len=text_opts.hard_max_seq_len,
+                    echo_prompt=True,
+                    step_processors=step_processors,
+                    unk_penalty=text_opts.unk_penalty,
+                    len_penalty=text_opts.len_penalty,
+                    compute_scores=text_opts.compute_scores,
+                )
+            elif text_opts.method == "self_speculative":
+                # TODO: avoid cloning model weights, using memo Dict arg and Python's id() function to fill it
+                t2t_model_draft = deepcopy(t2t_model)
+                assert text_opts.draft_early_exit is not None, "for self_speculative, draft_early_exit needs to be defined"
+                del t2t_model_draft.decoder.layers[text_opts.draft_early_exit:]
+                t2t_model_draft.decoder.layers = t2t_model_draft.decoder.layers[:text_opts.draft_early_exit]
+
+                generator = SpeculativeSamplingSeq2SeqGenerator(
+                    t2t_model,
+                    t2t_model_draft,
+                    text_opts.k_speculate,
                     sampler=TopKSampler(k=text_opts.top_k),
                     max_gen_len=text_opts.soft_max_seq_len,
                     max_seq_len=text_opts.hard_max_seq_len,
@@ -297,7 +321,27 @@ class UnitYGenerator:
                 elif unit_opts.method == "autoregressive":
                     self.unit_generator = SamplingSeq2SeqGenerator(
                         self.model.t2u_model,
-                        sampler=TopKSampler(k=text_opts.top_k),
+                        sampler=TopKSampler(k=unit_opts.top_k),
+                        max_gen_len=unit_opts.soft_max_seq_len,
+                        max_seq_len=unit_opts.hard_max_seq_len,
+                        echo_prompt=True,
+                        step_processors=step_processors,
+                        unk_penalty=unit_opts.unk_penalty,
+                        len_penalty=unit_opts.len_penalty,
+                        compute_scores=text_opts.compute_scores,
+                    )
+                elif text_opts.method == "self_speculative":
+                    # TODO: avoid cloning model weights, using memo Dict arg and Python's id() function to fill it
+                    t2u_model_draft = deepcopy(self.model.t2u_model)
+                    assert unit_opts.draft_early_exit is not None, "for self_speculative, draft_early_exit needs to be defined"
+                    del t2u_model_draft.decoder.layers[unit_opts.draft_early_exit:]
+                    t2u_model_draft.decoder.layers = t2u_model_draft.decoder.layers[:unit_opts.draft_early_exit]
+
+                    self.unit_generator = SpeculativeSamplingSeq2SeqGenerator(
+                        self.model.t2u_model,
+                        t2u_model_draft,
+                        unit_opts.k_speculate,
+                        sampler=TopKSampler(k=unit_opts.top_k),
                         max_gen_len=unit_opts.soft_max_seq_len,
                         max_seq_len=unit_opts.hard_max_seq_len,
                         echo_prompt=True,
