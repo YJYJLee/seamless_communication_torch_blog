@@ -88,6 +88,7 @@ class Translator(nn.Module):
         dtype: DataType = torch.float16,
         input_modality: Optional[Modality] = None,
         output_modality: Optional[Modality] = None,
+        text_generation_early_exit: Optional[int] = None,
     ):
         super().__init__()
 
@@ -154,6 +155,21 @@ class Translator(nn.Module):
                 vocoder_name_or_card, device=device, dtype=dtype
             )
             self.vocoder.eval()
+
+        if text_generation_early_exit:
+            def hook(
+                layer_idx: int,
+                layer_output: Tensor,
+                layer_padding_mask: Optional[PaddingMask],
+                num_layers: int,
+            ) -> bool:
+                if layer_idx == text_generation_early_exit:
+                    # We don't need to execute the remaining layers.
+                    return False
+
+                return True
+
+            self.model.text_decoder.register_layer_output_hook(hook)
 
     @classmethod
     def get_prediction(

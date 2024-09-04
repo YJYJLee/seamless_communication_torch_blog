@@ -66,6 +66,13 @@ def add_inference_arguments(parser: argparse.ArgumentParser) -> argparse.Argumen
     )
     # Text generation args.
     parser.add_argument(
+        "--text_generation_method",
+        type=str,
+        choices=["autoregressive", "beam_search", "self_speculative", "speculative"],
+        help="Method for text decoding.",
+        default="beam_search",
+    )
+    parser.add_argument(
         "--text_generation_beam_size",
         type=int,
         help="Beam size for incremental text decoding.",
@@ -93,12 +100,47 @@ def add_inference_arguments(parser: argparse.ArgumentParser) -> argparse.Argumen
         default=False,
     )
     parser.add_argument(
+        "--text_generation_compute_scores",
+        type=bool,
+        help=(
+            "Compute scores of hypothesese during text generation."
+        ),
+        default=False,
+    )
+    parser.add_argument(
+        "--text_generation_draft_early_exit",
+        type=int,
+        help="If text_generation_method is 'self_speculative' determines which layer to exit at during the draft stage.",
+        default=None,
+    )
+    parser.add_argument(
         "--no_repeat_ngram_size",
         type=int,
         help="Size of ngram repeat block for both text & unit decoding.",
         default=4,
     )
+    parser.add_argument(
+        "--text_generation_speculate_k",
+        type=int,
+        help="If text_generation_method is 'speculative' or 'self_speculative', determines how many tokens in draft stage.",
+        default=None,
+    )
+    parser.add_argument(
+        "--text_generation_early_exit",
+        type=int,
+        help=(
+            "Layer to exit at for text generation."
+        ),
+        default=None,
+    )
     # Unit generation args.
+    parser.add_argument(
+        "--unit_generation_method",
+        type=str,
+        choices=["autoregressive", "beam_search", "self_speculative", "speculative"],
+        help="Beam size for incremental unit decoding.",
+        default="beam_search",
+    )
     parser.add_argument(
         "--unit_generation_beam_size",
         type=int,
@@ -136,6 +178,14 @@ def add_inference_arguments(parser: argparse.ArgumentParser) -> argparse.Argumen
         default=False,
     )
     parser.add_argument(
+        "--unit_generation_compute_scores",
+        type=bool,
+        help=(
+            "Compute scores of hypothesese during unit generation."
+        ),
+        default=False,
+    )
+    parser.add_argument(
         "--unit_generation_ngram_filtering",
         type=bool,
         help=(
@@ -143,6 +193,18 @@ def add_inference_arguments(parser: argparse.ArgumentParser) -> argparse.Argumen
             "from the decoded unit output."
         ),
         default=False,
+    )
+    parser.add_argument(
+        "--unit_generation_speculate_k",
+        type=int,
+        help="If text_generation_method is 'speculative' or 'self_speculative', determines how many tokens in draft stage.",
+        default=None,
+    )
+    parser.add_argument(
+        "--unit_generation_draft_early_exit",
+        type=int,
+        help="If unit_generation_method is 'self_speculative' determines which layer to exit at during the draft stage.",
+        default=None,
     )
     parser.add_argument(
         "--text_unk_blocking",
@@ -161,11 +223,15 @@ def set_generation_opts(
 ) -> Tuple[SequenceGeneratorOptions, SequenceGeneratorOptions]:
     # Set text, unit generation opts.
     text_generation_opts = SequenceGeneratorOptions(
+        method=args.text_generation_method,
         beam_size=args.text_generation_beam_size,
         soft_max_seq_len=(
             args.text_generation_max_len_a,
             args.text_generation_max_len_b,
         ),
+        compute_scores=args.text_generation_compute_scores,
+        draft_early_exit=args.text_generation_draft_early_exit,
+        k_speculate=args.text_generation_speculate_k,
     )
     if args.text_unk_blocking:
         text_generation_opts.unk_penalty = torch.inf
@@ -175,11 +241,15 @@ def set_generation_opts(
         )
 
     unit_generation_opts = SequenceGeneratorOptions(
+        method=args.unit_generation_method,
         beam_size=args.unit_generation_beam_size,
         soft_max_seq_len=(
             args.unit_generation_max_len_a,
             args.unit_generation_max_len_b,
         ),
+        compute_scores=args.unit_generation_compute_scores,
+        draft_early_exit=args.unit_generation_draft_early_exit,
+        k_speculate=args.unit_generation_speculate_k,
     )
     if args.unit_generation_ngram_blocking:
         unit_generation_opts.step_processor = NGramRepeatBlockProcessor(

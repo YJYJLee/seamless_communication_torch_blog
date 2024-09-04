@@ -4,6 +4,7 @@
 # This source code is licensed under the license found in the
 # MIT_LICENSE file in the root directory of this source tree.
 
+from copy import deepcopy
 from dataclasses import dataclass
 from typing import List, Optional, Tuple
 
@@ -12,9 +13,12 @@ from fairseq2.data import SequenceData, StringLike
 from fairseq2.data.text import TextTokenizer
 from fairseq2.generation import (
     BeamSearchSeq2SeqGenerator,
+    SamplingSeq2SeqGenerator,
+    SpeculativeSamplingSeq2SeqGenerator,
     Seq2SeqGenerator,
     SequenceToTextConverter,
     StepProcessor,
+    TopKSampler,
 )
 from fairseq2.nn.padding import (
     PaddingMask,
@@ -62,6 +66,12 @@ def remove_consecutive_repeated_ngrams(
 class SequenceGeneratorOptions:
     """Holds the options to pass to a sequence generator."""
 
+    method: str = "beam_search"
+    """Decoding method."""
+
+    top_k: int = 1
+    """Top_k sampling for autoregressive decoding."""
+
     beam_size: int = 5
     """The beam size."""
 
@@ -84,6 +94,15 @@ class SequenceGeneratorOptions:
     len_penalty: float = 1.0
     """The length penalty, where values less than 1.0 favor shorter
     sequences; values greater than 1.0 favor longer sequences."""
+
+    compute_scores: bool = False
+    """Whether to compute scores of each hypothesis or not."""
+
+    draft_early_exit: int = None
+    """If method is 'self_speculative' this determines which layer to exit at."""
+
+    k_speculate: int = None
+    """If method is 'speculative' or 'self_speculative' this determines how many draft tokens we generate."""
 
 
 class UnitYGenerator:
@@ -146,16 +165,52 @@ class UnitYGenerator:
         if text_opts.step_processor is not None:
             step_processors.append(text_opts.step_processor)
 
-        generator = BeamSearchSeq2SeqGenerator(
-            s2t_model,
-            beam_size=text_opts.beam_size,
-            max_gen_len=text_opts.soft_max_seq_len,
-            max_seq_len=text_opts.hard_max_seq_len,
-            echo_prompt=True,
-            step_processors=step_processors,
-            unk_penalty=text_opts.unk_penalty,
-            len_penalty=text_opts.len_penalty,
-        )
+        if text_opts.method == "beam_search":
+            generator = BeamSearchSeq2SeqGenerator(
+                s2t_model,
+                beam_size=text_opts.beam_size,
+                max_gen_len=text_opts.soft_max_seq_len,
+                max_seq_len=text_opts.hard_max_seq_len,
+                echo_prompt=True,
+                step_processors=step_processors,
+                unk_penalty=text_opts.unk_penalty,
+                len_penalty=text_opts.len_penalty,
+                compute_scores=text_opts.compute_scores,
+            )
+        elif text_opts.method == "autoregressive":
+            generator = SamplingSeq2SeqGenerator(
+                s2t_model,
+                sampler=TopKSampler(k=text_opts.top_k),
+                max_gen_len=text_opts.soft_max_seq_len,
+                max_seq_len=text_opts.hard_max_seq_len,
+                echo_prompt=True,
+                step_processors=step_processors,
+                unk_penalty=text_opts.unk_penalty,
+                len_penalty=text_opts.len_penalty,
+                compute_scores=text_opts.compute_scores,
+            )
+        elif text_opts.method == "self_speculative":
+            # TODO: avoid cloning model weights, using memo Dict arg and Python's id() function to fill it
+            s2t_model_draft = deepcopy(s2t_model)
+            assert text_opts.draft_early_exit is not None, "for self_speculative, draft_early_exit needs to be defined"
+            del s2t_model_draft.decoder.layers[text_opts.draft_early_exit:]
+            s2t_model_draft.decoder.layers = s2t_model_draft.decoder.layers[:text_opts.draft_early_exit]
+
+            generator = SpeculativeSamplingSeq2SeqGenerator(
+                s2t_model,
+                s2t_model_draft,
+                text_opts.k_speculate,
+                sampler=TopKSampler(k=text_opts.top_k),
+                max_gen_len=text_opts.soft_max_seq_len,
+                max_seq_len=text_opts.hard_max_seq_len,
+                echo_prompt=True,
+                step_processors=step_processors,
+                unk_penalty=text_opts.unk_penalty,
+                len_penalty=text_opts.len_penalty,
+                compute_scores=text_opts.compute_scores,
+            )
+        else:
+            raise ValueError(f"Unsupported generation method {unit_opts.method}.")
         self.s2t_converter = SequenceToTextConverter(
             generator, text_tokenizer, "translation", target_lang
         )
@@ -173,16 +228,52 @@ class UnitYGenerator:
                 final_proj=model.final_proj,
                 target_vocab_info=model.target_vocab_info,
             )
-            generator = BeamSearchSeq2SeqGenerator(
-                t2t_model,
-                beam_size=text_opts.beam_size,
-                max_gen_len=text_opts.soft_max_seq_len,
-                max_seq_len=text_opts.hard_max_seq_len,
-                echo_prompt=True,
-                step_processors=step_processors,
-                unk_penalty=text_opts.unk_penalty,
-                len_penalty=text_opts.len_penalty,
-            )
+            if text_opts.method == "beam_search":
+                generator = BeamSearchSeq2SeqGenerator(
+                    t2t_model,
+                    beam_size=text_opts.beam_size,
+                    max_gen_len=text_opts.soft_max_seq_len,
+                    max_seq_len=text_opts.hard_max_seq_len,
+                    echo_prompt=True,
+                    step_processors=step_processors,
+                    unk_penalty=text_opts.unk_penalty,
+                    len_penalty=text_opts.len_penalty,
+                    compute_scores=text_opts.compute_scores,
+                )
+            elif text_opts.method == "autoregressive":
+                generator = SamplingSeq2SeqGenerator(
+                    t2t_model,
+                    sampler=TopKSampler(k=text_opts.top_k),
+                    max_gen_len=text_opts.soft_max_seq_len,
+                    max_seq_len=text_opts.hard_max_seq_len,
+                    echo_prompt=True,
+                    step_processors=step_processors,
+                    unk_penalty=text_opts.unk_penalty,
+                    len_penalty=text_opts.len_penalty,
+                    compute_scores=text_opts.compute_scores,
+                )
+            elif text_opts.method == "self_speculative":
+                # TODO: avoid cloning model weights, using memo Dict arg and Python's id() function to fill it
+                t2t_model_draft = deepcopy(t2t_model)
+                assert text_opts.draft_early_exit is not None, "for self_speculative, draft_early_exit needs to be defined"
+                del t2t_model_draft.decoder.layers[text_opts.draft_early_exit:]
+                t2t_model_draft.decoder.layers = t2t_model_draft.decoder.layers[:text_opts.draft_early_exit]
+
+                generator = SpeculativeSamplingSeq2SeqGenerator(
+                    t2t_model,
+                    t2t_model_draft,
+                    text_opts.k_speculate,
+                    sampler=TopKSampler(k=text_opts.top_k),
+                    max_gen_len=text_opts.soft_max_seq_len,
+                    max_seq_len=text_opts.hard_max_seq_len,
+                    echo_prompt=True,
+                    step_processors=step_processors,
+                    unk_penalty=text_opts.unk_penalty,
+                    len_penalty=text_opts.len_penalty,
+                    compute_scores=text_opts.compute_scores,
+                )
+            else:
+                raise ValueError(f"Unsupported generation method {unit_opts.method}.")
             self.t2t_converter = SequenceToTextConverter(
                 generator, text_tokenizer, "translation", target_lang
             )
@@ -215,16 +306,52 @@ class UnitYGenerator:
                 if unit_opts.step_processor is not None:
                     step_processors.append(unit_opts.step_processor)
 
-                self.unit_generator = BeamSearchSeq2SeqGenerator(
-                    self.model.t2u_model,
-                    beam_size=unit_opts.beam_size,
-                    max_gen_len=unit_opts.soft_max_seq_len,
-                    max_seq_len=unit_opts.hard_max_seq_len,
-                    echo_prompt=True,
-                    step_processors=step_processors,
-                    unk_penalty=unit_opts.unk_penalty,
-                    len_penalty=unit_opts.len_penalty,
-                )
+                if unit_opts.method == "beam_search":
+                    self.unit_generator = BeamSearchSeq2SeqGenerator(
+                        self.model.t2u_model,
+                        beam_size=unit_opts.beam_size,
+                        max_gen_len=unit_opts.soft_max_seq_len,
+                        max_seq_len=unit_opts.hard_max_seq_len,
+                        echo_prompt=True,
+                        step_processors=step_processors,
+                        unk_penalty=unit_opts.unk_penalty,
+                        len_penalty=unit_opts.len_penalty,
+                        compute_scores=text_opts.compute_scores,
+                    )
+                elif unit_opts.method == "autoregressive":
+                    self.unit_generator = SamplingSeq2SeqGenerator(
+                        self.model.t2u_model,
+                        sampler=TopKSampler(k=unit_opts.top_k),
+                        max_gen_len=unit_opts.soft_max_seq_len,
+                        max_seq_len=unit_opts.hard_max_seq_len,
+                        echo_prompt=True,
+                        step_processors=step_processors,
+                        unk_penalty=unit_opts.unk_penalty,
+                        len_penalty=unit_opts.len_penalty,
+                        compute_scores=text_opts.compute_scores,
+                    )
+                elif text_opts.method == "self_speculative":
+                    # TODO: avoid cloning model weights, using memo Dict arg and Python's id() function to fill it
+                    t2u_model_draft = deepcopy(self.model.t2u_model)
+                    assert unit_opts.draft_early_exit is not None, "for self_speculative, draft_early_exit needs to be defined"
+                    del t2u_model_draft.decoder.layers[unit_opts.draft_early_exit:]
+                    t2u_model_draft.decoder.layers = t2u_model_draft.decoder.layers[:unit_opts.draft_early_exit]
+
+                    self.unit_generator = SpeculativeSamplingSeq2SeqGenerator(
+                        self.model.t2u_model,
+                        t2u_model_draft,
+                        unit_opts.k_speculate,
+                        sampler=TopKSampler(k=unit_opts.top_k),
+                        max_gen_len=unit_opts.soft_max_seq_len,
+                        max_seq_len=unit_opts.hard_max_seq_len,
+                        echo_prompt=True,
+                        step_processors=step_processors,
+                        unk_penalty=unit_opts.unk_penalty,
+                        len_penalty=unit_opts.len_penalty,
+                        compute_scores=text_opts.compute_scores,
+                    )
+                else:
+                    raise ValueError(f"Unsupported generation method {unit_opts.method}.")
 
     @torch.inference_mode()
     def __call__(

@@ -22,6 +22,7 @@ from fairseq2.models.sequence import SequenceModelOutput
 from fairseq2.nn.padding import PaddingMask
 from fairseq2.optim.lr_scheduler import MyleLR
 from fairseq2.typing import Device
+from fairseq2.utils.early_exit_loss import early_exit_loss, hidden_states_dict
 from torch.optim import AdamW
 
 from seamless_communication.cli.m4t.finetune import dataloader, dist_utils
@@ -106,14 +107,14 @@ class UnitYFinetuneWrapper(nn.Module):
             seqs = batch.speech_to_text.src_tokens.to(self.device)
             assert batch.speech_to_text.src_lengths is not None
             seq_lens = batch.speech_to_text.src_lengths.to(self.device)
-            speech_encoder_out, speech_encoder_padding_mask = self.model.encode_speech(
+            speech_encoder_out, speech_encoder_padding_mask, gpu_util = self.model.encode_speech(
                 seqs=seqs, padding_mask=PaddingMask(seq_lens, seqs.size(1))
             )
             assert batch.speech_to_text.prev_output_tokens is not None
             seqs = batch.speech_to_text.prev_output_tokens.to(self.device)
             assert batch.speech_to_text.target_lengths is not None
             seq_lens = batch.speech_to_text.target_lengths.to(self.device)
-            text_decoder_out, text_decoder_padding_mask = self.model.decode(
+            text_decoder_out, text_decoder_padding_mask, gpu_util = self.model.decode(
                 seqs=seqs,
                 padding_mask=PaddingMask(seq_lens, seqs.size(1)),
                 encoder_output=speech_encoder_out,
@@ -376,8 +377,11 @@ class UnitYFinetune:
         self.optimizer.zero_grad()
         with torch.autocast(device_type=self.params.device.type, dtype=self.params.float_dtype):
             tokens, units = self.model(batch)
-        
-        loss = self.calc_loss(batch, tokens, units)
+            if False:
+                loss = self.calc_loss(batch, tokens, units)
+            else:
+                (_, _) = self.model(batch)
+                loss = early_exit_loss(self.model, hidden_states_dict, batch, self.calc_loss, e_scale=1.0, loss_scale_type="sum_l")
         if loss.isnan().any().item():
             logger.error(batch.speech_to_text)
             raise RuntimeError("Train loss is NaN! Something is wrong in the model!")

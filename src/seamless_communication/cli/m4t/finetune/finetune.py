@@ -11,6 +11,9 @@ from pathlib import Path
 
 import torch
 
+from fairseq2.utils.scales import ScaleType, get_values
+from fairseq2.utils.early_exit_loss import hook
+
 from seamless_communication.cli.m4t.finetune import dataloader, dist_utils, trainer
 from seamless_communication.models.unity import (
     load_unity_model,
@@ -112,6 +115,24 @@ def init_parser() -> argparse.ArgumentParser:
         help=("Maximum number of src_tokens per batch, used to avoid GPU OOM and maximize the effective batch size"),
     )
     parser.add_argument(
+        "--decoder_layer_drop_p",
+        type=float,
+        default=0.0,
+        help=("Maximum layer dropout rate in the decoder"),
+    )
+    parser.add_argument(
+        "--decoder_layer_drop_slice",
+        type=str,
+        default=":",
+        help=("String representing which layers to apply dropout to. Format is similar to numpy index ranges, e.g., 0::1, 0::2, :"),
+    )
+    parser.add_argument(
+        "--decoder_layer_drop_scale",
+        type=ScaleType,
+        default="uniform",
+        help=("String representing which layers to apply dropout to. Format is similar to numpy index ranges, e.g., 0::1, 0::2, :"),
+    )
+    parser.add_argument(
         "--mode",
         type=trainer.FinetuneMode,
         choices=list(trainer.FinetuneMode),
@@ -177,7 +198,14 @@ def main() -> None:
     
     if model.text_encoder is not None:
         model.text_encoder = None
-    
+
+    # Update layer dropout
+    if args.decoder_layer_drop_p > 0:
+        model.text_decoder.layers.drop_p = get_values(scale_type=args.decoder_layer_drop_scale, scale_period=len(model.text_decoder.layers), max_val=args.decoder_layer_drop_p, slice_str=args.decoder_layer_drop_slice)
+
+    # Set early exit loss hook
+    model.text_decoder.register_layer_output_hook(hook)
+
     # Put model on selected device
     model = model.to(finetune_params.device)
 
