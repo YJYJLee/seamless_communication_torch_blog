@@ -316,8 +316,8 @@ def run_eval(
     #     translator.compiled_text_decoder[1] = torch.compile(translator.model.text_decoder.forward2, mode='max-autotune', fullgraph=True)
 
 
-    torch._inductor.config.coordinate_descent_tuning = True
-    torch._inductor.config.force_fuse_int_mm_with_mul = True
+    # torch._inductor.config.coordinate_descent_tuning = True
+    # torch._inductor.config.force_fuse_int_mm_with_mul = True
     quant = os.environ.get('AUTOQUANT', False)
     if quant:
         from fairseq2.nn.projection import Linear
@@ -349,7 +349,7 @@ def run_eval(
         print("Autoquant benchmarking Start") 
         # # do autoquantization
         # translator.s2t_model_list[0].encoder.do_autoquant()
-        translator.s2t_model_list[0].decoder.do_autoquant()
+        translator.s2t_model_list[0].decoder.finalize_autoquant()
 
 
 
@@ -496,8 +496,8 @@ def run_eval(
 
 
     quant_str = "_autoquant" if quant else ""
-    dump_dir = "/fsx-atom/yejinlee/paper_submission_results/torch_compile"+str(quant_str)+"/1gpu_1node/"+ctx.task+"/batch_size_"+str(effective_batch_size) if compile \
-        else "/fsx-atom/yejinlee/paper_submission_results/torch_compile_baseline/1gpu_1node/"+ctx.task+"/batch_size_"+str(effective_batch_size)
+    dump_dir = "/home/yejinlee/fair/paper_results/seamless_torch_compile/torch_compile"+str(quant_str)+"/1gpu_1node/"+ctx.task+"/batch_size_"+str(effective_batch_size) if compile \
+        else "/home/yejinlee/fair/paper_results/seamless_torch_compile/torch_compile_baseline/1gpu_1node/"+ctx.task+"/batch_size_"+str(effective_batch_size)
     os.makedirs(dump_dir, exist_ok=True)
 
     with open(dump_dir+"/timer_result.txt", "w") as f:
