@@ -223,7 +223,7 @@ class UnitYX2TModel(EncoderDecoderModel):
 
     @finaloverride
     def encode(
-        self, seqs: Tensor, padding_mask: Optional[PaddingMask]
+        self, seqs: Tensor, padding_mask: Optional[PaddingMask], profile: bool = False
     ) -> Tuple[Tensor, Optional[PaddingMask]]:
         seqs, padding_mask = self.encoder_frontend(seqs, padding_mask)
         return self.encoder(seqs, padding_mask)  # type: ignore[no-any-return]
@@ -237,17 +237,18 @@ class UnitYX2TModel(EncoderDecoderModel):
         encoder_padding_mask: Optional[PaddingMask],
         *,
         state_bag: Optional[IncrementalStateBag] = None,
+        profile: bool = False
     ) -> Tuple[Tensor, Optional[PaddingMask]]:
         seqs, padding_mask = self.decoder_frontend(
             seqs, padding_mask, state_bag=state_bag
         )
-
         return self.decoder(  # type: ignore[no-any-return]
             seqs,
             padding_mask,
             encoder_output,
             encoder_padding_mask,
             state_bag=state_bag,
+            profile=profile
         )
 
     @finaloverride
@@ -382,6 +383,7 @@ class UnitYNART2UModel(Module):
         text_seqs: Optional[Tensor],
         duration_factor: float = 1.0,
         film_cond_emb: Optional[Tensor] = None,
+        profile: bool = False
     ) -> Tuple[SequenceModelOutput, Optional[PaddingMask], Tensor]:
         encoder_output, encoder_padding_mask = self.encode(
             text_decoder_output, text_decoder_padding_mask
@@ -396,6 +398,7 @@ class UnitYNART2UModel(Module):
             text_seqs,
             duration_factor,
             film_cond_emb,
+            profile=profile
         )
 
         return self.project(decoder_output), decoder_padding_mask, durations
@@ -417,6 +420,7 @@ class UnitYNART2UModel(Module):
         text_seqs: Optional[Tensor],
         duration_factor: float = 1.0,
         film_cond_emb: Optional[Tensor] = None,
+        profile: bool = False
     ) -> Tuple[Tensor, Optional[PaddingMask], Tensor]:
         # encoder_output: (N, S, M)
         # text_seqs: (N, S)
@@ -428,7 +432,7 @@ class UnitYNART2UModel(Module):
             film_cond_emb,
         )
         seqs, padding_mask = self.decoder(
-            seqs, padding_mask, film_cond_emb=film_cond_emb
+            seqs, padding_mask, film_cond_emb=film_cond_emb, profile=profile
         )
 
         return seqs, padding_mask, durations  # type: ignore[no-any-return]

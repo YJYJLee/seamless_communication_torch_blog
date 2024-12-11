@@ -177,17 +177,23 @@ class Generator(Module):
         self.ups.apply(init_weights)
         self.conv_post.apply(init_weights)
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor, profile: bool = False) -> Tensor:
         x = self.conv_pre(x)
         for i in range(self.num_upsamples):
             x = F.leaky_relu(x, LRELU_SLOPE)
             x = self.ups[i](x)
             xs = None
             for j in range(self.num_kernels):
+                if profile and i==0 and j == 0:
+                    torch.cuda.nvtx.range_push("hello")
+
                 if xs is None:
                     xs = self.resblocks[i * self.num_kernels + j](x)
                 else:
                     xs += self.resblocks[i * self.num_kernels + j](x)
+                    
+                if profile and i==0 and j == 0:
+                    torch.cuda.nvtx.range_pop()
             x = xs / self.num_kernels  # type: ignore
         x = F.leaky_relu(x)
         x = self.conv_post(x)

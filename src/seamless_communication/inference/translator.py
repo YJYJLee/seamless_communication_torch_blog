@@ -171,6 +171,7 @@ class Translator(nn.Module):
         unit_generation_ngram_filtering: bool = False,
         duration_factor: float = 1.0,
         prosody_encoder_input: Optional[SequenceData] = None,
+        profile: bool = False
     ) -> Tuple[List[StringLike], Optional[Tensor]]:
         # We disregard unit generations opts for the NAR T2U decoder.
         if output_modality != Modality.SPEECH or isinstance(
@@ -195,6 +196,7 @@ class Translator(nn.Module):
             ngram_filtering=unit_generation_ngram_filtering,
             duration_factor=duration_factor,
             prosody_encoder_input=prosody_encoder_input,
+            profile=profile
         )
 
     @staticmethod
@@ -229,6 +231,7 @@ class Translator(nn.Module):
         duration_factor: float = 1.0,
         prosody_encoder_input: Optional[SequenceData] = None,
         src_text: Optional[StringLike] = None,
+        profile: bool = False
     ) -> Tuple[List[StringLike], Optional[BatchedSpeechOutput]]:
         """
         The main method used to perform inference on all tasks.
@@ -335,6 +338,7 @@ class Translator(nn.Module):
             unit_generation_ngram_filtering=unit_generation_ngram_filtering,
             duration_factor=duration_factor,
             prosody_encoder_input=prosody_encoder_input,
+            profile=profile
         )
 
         if self.apply_mintox and task_str != Task.ASR.name:
@@ -416,7 +420,7 @@ class Translator(nn.Module):
 
             if self.vocoder is not None:
                 translated_audio_wav = self.vocoder(
-                    units, tgt_lang, spkr, dur_prediction=duration_prediction
+                    units, tgt_lang, spkr, dur_prediction=duration_prediction, profile=profile
                 )
                 for i in range(len(units)):
                     padding_removed_audio_wav = translated_audio_wav[

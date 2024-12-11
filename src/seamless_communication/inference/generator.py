@@ -236,6 +236,7 @@ class UnitYGenerator:
         ngram_filtering: bool = False,
         duration_factor: float = 1.0,
         prosody_encoder_input: Optional[SequenceData] = None,
+        profile: bool = False
     ) -> Tuple[List[StringLike], Optional[Tensor]]:
         """
         :param source_seqs:
@@ -260,7 +261,7 @@ class UnitYGenerator:
         """
         if input_modality == "speech":
             texts, text_gen_output, timer_result = self.s2t_converter.batch_convert(
-                source_seqs, source_padding_mask
+                source_seqs, source_padding_mask, profile=profile
             )
         elif input_modality == "text":
             if self.t2t_converter is None:
@@ -268,7 +269,7 @@ class UnitYGenerator:
                     "Please set `use_text_encoder` to `True` in your model config to encode text."
                 )
             texts, text_gen_output, timer_result = self.t2t_converter.batch_convert(
-                source_seqs, source_padding_mask
+                source_seqs, source_padding_mask, profile=profile
             )
         else:
             raise ValueError(f"Unsupported input_modality: {input_modality}")
@@ -346,13 +347,13 @@ class UnitYGenerator:
         else:
             torch.cuda.synchronize()
             start_time = time.time()
-
             t2u_model_output, decoder_padding_mask, _ = self.model.t2u_model(
                 text_decoder_output=decoder_output,
                 text_decoder_padding_mask=decoder_padding_mask,
                 text_seqs=text_seqs,
                 duration_factor=duration_factor,
                 film_cond_emb=prosody_encoder_out,
+                profile=profile
             )
             # (B, S_unit, V_unit)
             unit_seqs = t2u_model_output.logits.argmax(dim=2)

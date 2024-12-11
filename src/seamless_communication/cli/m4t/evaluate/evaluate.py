@@ -348,7 +348,10 @@ def run_eval(
                         text_generation_opts=ctx.text_generation_opts,
                         unit_generation_opts=ctx.unit_generation_opts,
                         unit_generation_ngram_filtering=ctx.unit_generation_ngram_filtering,
+                        profile = iter_id == 1, # profile second inference example
                     )
+                    if iter_id == 1:
+                        exit(0)
                     timer_results.append(runtime)
                     print(runtime)
                     # if len(timer_results)==0:
