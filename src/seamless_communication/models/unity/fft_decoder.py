@@ -68,9 +68,14 @@ class FeedForwardTransformer(Module):
         seqs: Tensor,
         padding_mask: Optional[PaddingMask],
         film_cond_emb: Optional[Tensor] = None,
+        profile: bool = False
     ) -> Tuple[Tensor, Optional[PaddingMask]]:
-        for layer in self.layers.drop_iter():
+        for idx, layer in eneumerate(self.layers.drop_iter()):
+            if idx == 5:
+                torch.cuda.nvtx.range_push("hello")
             seqs, padding_mask = layer(seqs, padding_mask, film_cond_emb=film_cond_emb)
+            if idx == 5:
+                torch.cuda.nvtx.range_pop()
         if self.layer_norm is not None:
             seqs = self.layer_norm(seqs)
 

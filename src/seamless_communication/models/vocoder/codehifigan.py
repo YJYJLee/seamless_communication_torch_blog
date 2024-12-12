@@ -72,7 +72,7 @@ class CodeGenerator(Generator):
         signal = signal.view(bsz, channels, max_frames)
         return signal
 
-    def forward(self, sample: Dict[str, Any], dur_prediction: bool) -> Tensor:  # type: ignore
+    def forward(self, sample: Dict[str, Any], dur_prediction: bool, profile: bool = False) -> Tensor:  # type: ignore
         x = sample["code"]
         x = self.dict(x).transpose(1, 2)
 

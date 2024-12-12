@@ -196,7 +196,8 @@ class Translator(nn.Module):
         prosody_encoder_input: Optional[SequenceData] = None,
         compiled_text_decoder: Optional[list] = None,
         s2t_model_list: Optional[list] = None,
-        initial_run = False
+        initial_run = False,
+        profile: bool = False
     ) -> Tuple[List[StringLike], Optional[Tensor]]:
         # We disregard unit generations opts for the NAR T2U decoder.
         if output_modality != Modality.SPEECH or isinstance(
@@ -240,6 +241,7 @@ class Translator(nn.Module):
             prosody_encoder_input=prosody_encoder_input,
             compiled_text_decoder = compiled_text_decoder,
             s2t_model_list = s2t_model_list,
+            profile=profile
         )
         return output
 
@@ -275,7 +277,8 @@ class Translator(nn.Module):
         duration_factor: float = 1.0,
         prosody_encoder_input: Optional[SequenceData] = None,
         src_text: Optional[StringLike] = None,
-        initial_run = False
+        initial_run = False,
+        profile: bool = False
     ) -> Tuple[List[StringLike], Optional[BatchedSpeechOutput]]:
         """
         The main method used to perform inference on all tasks.
@@ -384,7 +387,8 @@ class Translator(nn.Module):
             prosody_encoder_input=prosody_encoder_input,
             compiled_text_decoder = self.compiled_text_decoder,
             s2t_model_list = self.s2t_model_list,
-            initial_run = initial_run
+            initial_run = initial_run,
+            profile=profile
         )
 
         if self.apply_mintox and task_str != Task.ASR.name:
@@ -470,7 +474,7 @@ class Translator(nn.Module):
                 if self.compile:
                     units = torch.cat((units, torch.zeros((units.shape[0], 835-units.shape[1]), device=units.device, dtype=units.dtype)), -1)
                 translated_audio_wav = self.vocoder(
-                    units, tgt_lang, spkr, dur_prediction=duration_prediction
+                    units, tgt_lang, spkr, dur_prediction=duration_prediction, profile=profile
                 )
                 for i in range(len(units)):
                     padding_removed_audio_wav = translated_audio_wav[

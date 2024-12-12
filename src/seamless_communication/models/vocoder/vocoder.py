@@ -28,6 +28,7 @@ class Vocoder(Module):
         lang_list: Union[List[str], str],
         spkr_list: Union[Optional[List[int]], int] = None,
         dur_prediction: bool = True,
+        profile: bool = False
     ) -> Tensor:
         # TODO: Do we need this backward compatibility, or just update all calling sites? 
         if len(units.shape) == 1:
@@ -46,4 +47,4 @@ class Vocoder(Module):
             "lang": torch.tensor([lang_idx_list], device=units.device).t(),
 
         }
-        return self.code_generator(x, dur_prediction)  # type: ignore[no-any-return]
+        return self.code_generator(x, dur_prediction, profile=profile)  # type: ignore[no-any-return]

@@ -43,7 +43,7 @@ from seamless_communication.inference import (
 import numpy as np
 import os 
 import time
-import torchao
+# import torchao
 
 logging.basicConfig(
     level=logging.INFO,
@@ -316,8 +316,8 @@ def run_eval(
     #     translator.compiled_text_decoder[1] = torch.compile(translator.model.text_decoder.forward2, mode='max-autotune', fullgraph=True)
 
 
-    torch._inductor.config.coordinate_descent_tuning = True
-    torch._inductor.config.force_fuse_int_mm_with_mul = True
+    # torch._inductor.config.coordinate_descent_tuning = True
+    # torch._inductor.config.force_fuse_int_mm_with_mul = True
     quant = os.environ.get('AUTOQUANT', False)
     if quant:
         from fairseq2.nn.projection import Linear
@@ -435,7 +435,10 @@ def run_eval(
                         text_generation_opts=ctx.text_generation_opts,
                         unit_generation_opts=ctx.unit_generation_opts,
                         unit_generation_ngram_filtering=ctx.unit_generation_ngram_filtering,
+                        profile = iter_id == 1, # profile second inference example
                     )
+                    if iter_id==1:
+                        exit(0)
                     timer_results.append(runtime)
                     print(runtime)
                     # print(text_output)
