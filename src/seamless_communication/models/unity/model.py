@@ -18,7 +18,7 @@ from fairseq2.nn.transformer import TransformerDecoder, TransformerEncoder
 from overrides import final as finaloverride
 from torch import Tensor
 from torch.nn import Module
-
+import torch
 from seamless_communication.models.generator.ecapa_tdnn import ECAPA_TDNN
 from seamless_communication.models.unity.fft_decoder import FeedForwardTransformer
 from seamless_communication.models.unity.nar_decoder_frontend import NARDecoderFrontend
@@ -248,7 +248,10 @@ class UnitYX2TModel(EncoderDecoderModel):
             seqs, padding_mask, state_bag=state_bag
         )
         if compiled_decoder is not None:
-            return compiled_decoder(  # type: ignore[no-any-return]
+            if profile:
+                print("Unityx2tmodel profile start")
+                torch.cuda.nvtx.range_push("hello")
+            output = compiled_decoder(  # type: ignore[no-any-return]
                 seqs,
                 padding_mask,
                 encoder_output,
@@ -259,8 +262,12 @@ class UnitYX2TModel(EncoderDecoderModel):
                 beam_size=self.beam_size,
                 profile=profile
             )
+            if profile:
+                print("Unityx2tmodel profile end")
+                torch.cuda.nvtx.range_pop()
+            return output
         else:
-            return self.decoder(  # type: ignore[no-any-return]
+            return self.decoder.forward2(  # type: ignore[no-any-return]
                 seqs,
                 padding_mask,
                 encoder_output,
@@ -451,9 +458,16 @@ class UnitYNART2UModel(Module):
             duration_factor,
             film_cond_emb,
         )
+        if profile:
+            print("UnityNartmodel profile start")
+            torch.cuda.nvtx.range_push("hello")
+
         seqs, padding_mask = self.decoder(
-            seqs, padding_mask, film_cond_emb=film_cond_emb, profile=profile
+            seqs, padding_mask, film_cond_emb=film_cond_emb
         )
+        if profile:
+            print("UnityNartmodel profile end")
+            torch.cuda.nvtx.range_pop()
 
         return seqs, padding_mask, durations  # type: ignore[no-any-return]
 

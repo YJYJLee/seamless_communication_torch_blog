@@ -305,8 +305,8 @@ class UnitYGenerator:
         torch.cuda.synchronize()
         start_time = time.time()
         # Use the output of the text generator to compute the decoder output.
-        decoder_output, decoder_padding_mask = self.model.decode(
-        # decoder_output, decoder_padding_mask = s2t_model_list[0].decode(
+        # decoder_output, decoder_padding_mask = self.model.decode(
+        decoder_output, decoder_padding_mask = s2t_model_list[0].decode(
             text_seqs,
             text_padding_mask,
             text_gen_output.encoder_output,
