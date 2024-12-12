@@ -98,4 +98,4 @@ class CodeGenerator(Generator):
         x = torch.cat([x, spkr], dim=1)
         x = torch.cat([lang, x], dim=1)
 
-        return super().forward(x)
+        return super().forward(x, profile=profile)

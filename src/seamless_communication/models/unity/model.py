@@ -18,6 +18,7 @@ from fairseq2.nn.transformer import TransformerDecoder, TransformerEncoder
 from overrides import final as finaloverride
 from torch import Tensor
 from torch.nn import Module
+import torch
 
 from seamless_communication.models.generator.ecapa_tdnn import ECAPA_TDNN
 from seamless_communication.models.unity.fft_decoder import FeedForwardTransformer
@@ -242,7 +243,9 @@ class UnitYX2TModel(EncoderDecoderModel):
         seqs, padding_mask = self.decoder_frontend(
             seqs, padding_mask, state_bag=state_bag
         )
-        return self.decoder(  # type: ignore[no-any-return]
+        if profile:
+            torch.cuda.nvtx.range_push("hello")
+        output = self.decoder(  # type: ignore[no-any-return]
             seqs,
             padding_mask,
             encoder_output,
@@ -250,6 +253,10 @@ class UnitYX2TModel(EncoderDecoderModel):
             state_bag=state_bag,
             profile=profile
         )
+        if profile:
+            torch.cuda.nvtx.range_pop()
+
+        return output
 
     @finaloverride
     def project(
@@ -431,9 +438,15 @@ class UnitYNART2UModel(Module):
             duration_factor,
             film_cond_emb,
         )
+        if profile:
+            print("UnityNartmodel profile start")
+            torch.cuda.nvtx.range_push("hello")
         seqs, padding_mask = self.decoder(
             seqs, padding_mask, film_cond_emb=film_cond_emb, profile=profile
         )
+        if profile:
+            print("UnityNartmodel profile start")
+            torch.cuda.nvtx.range_pop()
 
         return seqs, padding_mask, durations  # type: ignore[no-any-return]
 
