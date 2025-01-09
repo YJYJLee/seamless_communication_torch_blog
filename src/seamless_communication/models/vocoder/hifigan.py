@@ -185,6 +185,7 @@ class Generator(Module):
             xs = None
             for j in range(self.num_kernels):
                 if profile and i==0 and j == 0:
+                    print("Vocoder profiling start")
                     torch.cuda.nvtx.range_push("hello")
 
                 if xs is None:
@@ -193,6 +194,7 @@ class Generator(Module):
                     xs += self.resblocks[i * self.num_kernels + j](x)
                     
                 if profile and i==0 and j == 0:
+                    print("Vocoder profiling end")
                     torch.cuda.nvtx.range_pop()
             x = xs / self.num_kernels  # type: ignore
         x = F.leaky_relu(x)

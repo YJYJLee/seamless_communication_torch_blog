@@ -350,10 +350,11 @@ def run_eval(
                         unit_generation_ngram_filtering=ctx.unit_generation_ngram_filtering,
                         profile = iter_id == 10, # profile second inference example
                     )
-                    if iter_id == 1:
-                        exit(0)
                     timer_results.append(runtime)
                     print(runtime)
+                    if iter_id == 10:
+                        print("EXIT")
+                        exit(0)
                     # if len(timer_results)==0:
                     #     for k, v in runtime.items():
                     #         timer_results[k] = [v]

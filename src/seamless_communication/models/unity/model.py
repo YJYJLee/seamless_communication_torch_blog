@@ -244,6 +244,7 @@ class UnitYX2TModel(EncoderDecoderModel):
             seqs, padding_mask, state_bag=state_bag
         )
         if profile:
+            print("profiling start")
             torch.cuda.nvtx.range_push("hello")
         output = self.decoder(  # type: ignore[no-any-return]
             seqs,
@@ -254,6 +255,7 @@ class UnitYX2TModel(EncoderDecoderModel):
             profile=profile
         )
         if profile:
+            print("profiling end")
             torch.cuda.nvtx.range_pop()
 
         return output
@@ -445,7 +447,7 @@ class UnitYNART2UModel(Module):
             seqs, padding_mask, film_cond_emb=film_cond_emb, profile=profile
         )
         if profile:
-            print("UnityNartmodel profile start")
+            print("UnityNartmodel profile end")
             torch.cuda.nvtx.range_pop()
 
         return seqs, padding_mask, durations  # type: ignore[no-any-return]
